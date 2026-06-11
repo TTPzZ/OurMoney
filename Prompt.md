@@ -1,474 +1,450 @@
-# Nhiệm vụ: Fix avatar API render, reset profile về mặc định Google, và member list trong group
+# Nhiệm vụ: Nâng cấp giao diện OurMoney, chỉ chỉnh UI/UX, không thay đổi logic
 
 ## Bối cảnh
 
-Project OurMoney đang dùng:
+Project: **OurMoney**
+Stack hiện tại:
 
 * Next.js App Router
-* NextAuth Google Login
-* MongoDB/Mongoose
-* Vercel
+* NextAuth / Google Login
+* MongoDB / Mongoose
+* Tailwind CSS
+* Deploy trên Vercel
 
-Hiện tại khi upload/render avatar custom bị lỗi:
+Mục tiêu lần này là **chỉ nâng cấp giao diện** để web nhìn sạch sẽ, hiện đại, thân thiện và nhất quán hơn.
 
-```txt
-Bad request
-INVALID_IMAGE_OPTIMIZE_REQUEST
-```
-
-Request lỗi:
-
-```txt
-/_next/image?url=%2Fapi%2Fuser%2Favatar%3FuserId%3D...&w=128&q=75
-```
-
-Điều này cho thấy app đang dùng Next `<Image />` để optimize ảnh từ internal API route:
-
-```txt
-/api/user/avatar?userId=...
-```
-
-Yêu cầu là sửa avatar render giống kiểu Google avatar: hiển thị trực tiếp, hỗ trợ cả GIF, không bị Vercel Image Optimization lỗi 400.
+Tuyệt đối không thêm tính năng mới, không sửa flow, không thay đổi business logic, không thay đổi API, không thay đổi database schema, không chỉnh auth, không chỉnh cache, không chỉnh route.
 
 ---
 
 # Mục tiêu chính
 
-1. Fix lỗi `INVALID_IMAGE_OPTIMIZE_REQUEST`.
-2. Avatar custom và Google avatar đều hiển thị ổn.
-3. Avatar GIF hiển thị được.
-4. Có tính năng xóa tên custom để khôi phục tên mặc định từ Google.
-5. Có tính năng xóa ảnh custom để khôi phục avatar mặc định từ Google.
-6. Trong group, bấm vào cụm avatar thành viên góc phải để mở danh sách thành viên.
+Cải thiện UI hiện tại theo hướng:
+
+* Sạch sẽ hơn.
+* Dễ nhìn hơn.
+* Thân thiện với người dùng hơn.
+* Đồng bộ màu sắc, font, khoảng cách, bo góc, shadow.
+* Không bị lỗi font.
+* Không bị lỗi bóng đổ quá đậm/quá lệch.
+* Không bị lỗi input chữ trùng màu nền.
+* Responsive tốt trên mobile và desktop.
+* Bám sát giao diện và cấu trúc hiện tại của dự án.
+
+Không được biến web thành một thiết kế hoàn toàn khác.
 
 ---
 
-# Phần 1: Fix render avatar
+# Phạm vi được phép chỉnh
 
-## Vấn đề hiện tại
+Chỉ được chỉnh:
 
-Có chỗ đang render avatar kiểu:
+1. Tailwind className.
+2. Layout spacing.
+3. Typography.
+4. Button style.
+5. Card style.
+6. Input/select/textarea style.
+7. Modal/dialog visual style.
+8. Avatar/image display style.
+9. Header/navbar visual style.
+10. Loading/skeleton visual style nếu đã có sẵn.
+11. Empty state visual style nếu đã có sẵn.
+12. Responsive class cho mobile/tablet/desktop.
+13. Các component UI thuần giao diện.
 
-```tsx
-<Image src={`/api/user/avatar?userId=${userId}&v=${...}`} ... />
-```
-
-Next/Vercel sẽ biến nó thành:
+Có thể tạo component UI dùng chung nếu chỉ để giảm lặp giao diện, ví dụ:
 
 ```txt
-/_next/image?url=/api/user/avatar...
+Button
+Input
+Card
+Avatar
+PageHeader
+SectionCard
 ```
 
-và gây lỗi 400 nếu API route không tương thích với Image Optimizer.
+Nhưng không được thay đổi behavior.
 
-## Yêu cầu sửa
+---
 
-Tìm toàn bộ chỗ render avatar/user image/member image:
+# Những thứ tuyệt đối không được sửa
+
+Không được chỉnh:
+
+1. Auth flow.
+2. Login/logout logic.
+3. Server actions.
+4. API route logic.
+5. MongoDB query logic.
+6. Database schema/model.
+7. SWR/cache logic.
+8. Route/navigation flow.
+9. Permission/security check.
+10. Bill calculation logic.
+11. Settlement calculation logic.
+12. Group join/share logic.
+13. Upload avatar logic.
+14. Any business logic.
+15. Any new feature.
+
+Không được thêm:
+
+* Realtime.
+* Chart mới.
+* Animation phức tạp.
+* Modal mới không có trong yêu cầu.
+* Page mới.
+* Button/action mới.
+* Flow mới.
+
+---
+
+# Yêu cầu cách làm
+
+## 1. Đọc dự án trước khi sửa
+
+Trước khi chỉnh UI, hãy đọc cấu trúc hiện tại:
+
+```txt
+src/app
+src/components
+src/lib
+src/styles hoặc globals.css
+tailwind.config
+```
+
+Xác định:
+
+* Các page chính.
+* Các component đang dùng lại.
+* Theme/màu hiện tại.
+* Class Tailwind hiện tại.
+* Nơi đang bị lỗi input/font/shadow.
+
+Không sửa vội theo cảm tính.
+
+---
+
+## 2. Bám sát style hiện tại
+
+Không đổi brand quá mạnh.
+
+Nếu web đang dùng tone xanh/tím/trắng thì giữ tone đó, chỉ tinh chỉnh cho đẹp hơn.
+
+Ưu tiên style:
+
+```txt
+clean
+modern
+soft
+rounded
+minimal
+friendly
+mobile-first
+```
+
+Không dùng style quá màu mè hoặc quá corporate.
+
+---
+
+## 3. Chuẩn hóa spacing
+
+Kiểm tra và chỉnh lại:
+
+* Padding page.
+* Gap giữa các section.
+* Khoảng cách trong card.
+* Khoảng cách giữa title/subtitle/content.
+* Khoảng cách button group.
+* Mobile spacing.
+
+Gợi ý:
+
+* Page container: `max-w-5xl mx-auto px-4 sm:px-6 lg:px-8`
+* Section spacing: `space-y-6`
+* Card padding: `p-4 sm:p-6`
+* Button gap: `gap-2` hoặc `gap-3`
+
+Không để UI quá sát mép màn hình mobile.
+
+---
+
+## 4. Chuẩn hóa card
+
+Các card nên có style nhất quán:
+
+```tsx
+rounded-2xl border border-slate-200 bg-white shadow-sm
+```
+
+Dark mode nếu có:
+
+```tsx
+dark:border-slate-800 dark:bg-slate-950
+```
+
+Không dùng shadow quá đậm kiểu:
+
+```tsx
+shadow-2xl
+shadow-black/50
+```
+
+trừ khi thực sự cần.
+
+Ưu tiên:
+
+```tsx
+shadow-sm
+shadow-md
+```
+
+---
+
+## 5. Chuẩn hóa button
+
+Các button phải rõ trạng thái:
+
+* Primary
+* Secondary
+* Danger
+* Ghost/Icon button
+
+Yêu cầu:
+
+* Click target đủ lớn trên mobile.
+* Hover/focus rõ.
+* Disabled nhìn khác active.
+* Không bị chữ trùng màu nền.
+
+Ví dụ style:
+
+```tsx
+inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition
+focus:outline-none focus:ring-2 focus:ring-offset-2
+disabled:pointer-events-none disabled:opacity-50
+```
+
+Không thay đổi onClick, submit handler, href, type.
+
+---
+
+## 6. Chuẩn hóa input/select/textarea
+
+Đây là phần quan trọng vì hiện tại có lỗi chữ và nền trùng màu.
+
+Tất cả input/select/textarea phải đọc được ở desktop và mobile.
+
+Style gợi ý:
+
+```tsx
+w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400
+outline-none transition
+focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
+disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500
+dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500
+```
+
+Kiểm tra toàn bộ:
 
 ```bash
-grep -R "next/image" src
-grep -R "<Image" src
-grep -R "avatar" src
-grep -R "user.image" src
+grep -R "<input" src
+grep -R "<textarea" src
+grep -R "<select" src
 ```
 
-Với avatar người dùng, đổi sang component avatar chung, ví dụ:
+Không để:
 
-```txt
-src/components/UserAvatar.tsx
-```
+* chữ trắng trên nền trắng
+* chữ đen trên nền đen
+* placeholder quá mờ
+* input quá nhỏ trên mobile
 
-Component này nên dùng `<img>` thường, không dùng Next Image optimizer.
+---
 
-Ví dụ:
+## 7. Chuẩn hóa typography
+
+Kiểm tra title/subtitle/body text.
+
+Gợi ý:
+
+* Page title:
 
 ```tsx
-type UserAvatarProps = {
-  src?: string | null;
-  name?: string | null;
-  size?: number;
-  className?: string;
-};
-
-export function UserAvatar({
-  src,
-  name,
-  size = 40,
-  className = "",
-}: UserAvatarProps) {
-  const fallback = "/default-avatar.png";
-
-  return (
-    <img
-      src={src || fallback}
-      alt={name || "User avatar"}
-      width={size}
-      height={size}
-      className={`rounded-full object-cover ${className}`}
-      referrerPolicy="no-referrer"
-      loading="lazy"
-    />
-  );
-}
+text-2xl sm:text-3xl font-bold tracking-tight text-slate-950
 ```
 
-Nếu có lý do bắt buộc dùng Next Image, phải thêm `unoptimized`:
+* Section title:
 
 ```tsx
-<Image
-  src={src || "/default-avatar.png"}
-  alt={name || "User avatar"}
-  width={size}
-  height={size}
-  unoptimized
-/>
+text-lg font-semibold text-slate-900
 ```
 
-Nhưng ưu tiên `<img>` để hỗ trợ GIF và tránh lỗi optimize.
-
-Acceptance:
-
-* Không còn request `/_next/image?.../api/user/avatar...` cho avatar user.
-* Avatar custom không còn lỗi 400.
-* GIF avatar vẫn động.
-* Google avatar vẫn hiển thị.
-
----
-
-# Phần 2: Chuẩn hóa avatar URL
-
-Hiện tại avatar có thể là:
-
-* Google image URL
-* Custom uploaded avatar
-* API route `/api/user/avatar?userId=...`
-
-Yêu cầu:
-
-* UI chỉ cần nhận `displayImage`.
-* `displayImage` ưu tiên custom avatar, nếu không có thì dùng Google avatar.
-
-Trong User model nên có các field rõ ràng:
-
-```ts
-name: string
-image?: string              // custom display avatar hoặc avatar hiện tại
-googleName?: string
-googleImage?: string
-customName?: string
-customImage?: string
-```
-
-Nếu chưa muốn migrate nhiều, có thể dùng logic:
-
-```ts
-displayName = user.name || user.googleName || user.email
-displayImage = user.image || user.googleImage
-```
-
-Nhưng để hỗ trợ reset mặc định, nên tách:
-
-```ts
-googleName
-googleImage
-customName
-customImage
-```
-
-Sau đó API `/api/me` trả:
-
-```ts
-{
-  user: {
-    _id,
-    email,
-    name: customName || googleName,
-    image: customImage || googleImage,
-    customName,
-    customImage,
-    googleName,
-    googleImage
-  }
-}
-```
-
----
-
-# Phần 3: Không để Google overwrite custom profile khi login
-
-Kiểm tra `src/auth.ts`.
-
-Khi user login bằng Google:
-
-* Nếu user chưa tồn tại: tạo user với googleName/googleImage.
-* Nếu user đã tồn tại:
-
-  * update `googleName`, `googleImage`, `email` nếu cần
-  * KHÔNG overwrite `customName`, `customImage`
-  * display name/avatar phải ưu tiên custom.
-
-Pseudo:
-
-```ts
-let dbUser = await User.findOne({ googleId: profile.sub });
-
-if (!dbUser) {
-  dbUser = await User.create({
-    googleId: profile.sub,
-    email: user.email,
-    googleName: user.name,
-    googleImage: user.image,
-    customName: null,
-    customImage: null,
-  });
-} else {
-  dbUser.email = user.email || dbUser.email;
-  dbUser.googleName = user.name || dbUser.googleName;
-  dbUser.googleImage = user.image || dbUser.googleImage;
-  await dbUser.save();
-}
-
-token.userId = dbUser._id.toString();
-token.name = dbUser.customName || dbUser.googleName;
-token.picture = dbUser.customImage || dbUser.googleImage;
-```
-
-Acceptance:
-
-* Đổi tên/avatar custom không bị mất sau logout/login.
-* Google name/avatar chỉ là default.
-* Custom profile luôn được ưu tiên.
-
----
-
-# Phần 4: API cập nhật profile và reset về mặc định
-
-Kiểm tra hoặc tạo:
-
-```txt
-GET /api/me
-PATCH /api/me
-```
-
-## PATCH /api/me
-
-Hỗ trợ update custom name/avatar:
-
-```ts
-{
-  name?: string,
-  image?: string
-}
-```
-
-Khi nhận:
-
-* `name` thì lưu vào `customName`
-* `image` thì lưu vào `customImage`
-
-## Reset name
-
-Thêm action/API:
-
-```txt
-DELETE /api/me/name
-```
-
-hoặc dùng PATCH:
-
-```ts
-{
-  resetName: true
-}
-```
-
-Khi reset:
-
-* set `customName = null`
-* display name quay lại `googleName`
-
-## Reset avatar
-
-Thêm action/API:
-
-```txt
-DELETE /api/me/avatar
-```
-
-hoặc dùng PATCH:
-
-```ts
-{
-  resetImage: true
-}
-```
-
-Khi reset:
-
-* set `customImage = null`
-* display image quay lại `googleImage`
-
-Acceptance:
-
-* Bấm “Khôi phục tên mặc định” → tên quay lại Google name.
-* Bấm “Khôi phục ảnh mặc định” → avatar quay lại Google avatar.
-* Reload vẫn đúng.
-* Logout/login vẫn đúng.
-
----
-
-# Phần 5: UI Profile thêm nút reset
-
-Trong profile edit UI thêm:
-
-```txt
-Khôi phục tên mặc định
-Khôi phục ảnh mặc định
-```
-
-Chỉ hiện nút nếu đang có custom value:
-
-```ts
-if (user.customName) show reset name
-if (user.customImage) show reset avatar
-```
-
-Sau khi reset:
-
-* mutate `/api/me`
-* mutate `/api/groups`
-* mutate các `/api/groups/[id]` nếu dùng SWR
-* update session nếu app đang dùng NextAuth `useSession().update()`
-
-Pseudo:
-
-```ts
-await patchMe({ resetImage: true });
-
-mutate("/api/me");
-mutate("/api/groups");
-mutate((key) => typeof key === "string" && key.startsWith("/api/groups/"));
-```
-
----
-
-# Phần 6: Fix `/api/user/avatar`
-
-Nếu vẫn giữ route:
-
-```txt
-/api/user/avatar?userId=...
-```
-
-Đảm bảo route trả raw image đúng chuẩn:
-
-* status 200
-* header `Content-Type` đúng: `image/png`, `image/jpeg`, `image/gif`, `image/webp`
-* không trả JSON khi thành công
-* nếu không có avatar thì redirect hoặc trả default image hợp lệ
-* có cache header hợp lý
-
-Ví dụ:
-
-```ts
-return new NextResponse(buffer, {
-  headers: {
-    "Content-Type": contentType,
-    "Cache-Control": "public, max-age=3600",
-  },
-});
-```
-
-Nhưng lưu ý:
-
-* UI avatar vẫn không được render route này bằng Next `<Image />` optimize.
-* Dùng `<img src="/api/user/avatar?...">`.
-
----
-
-# Phần 7: Bấm avatar thành viên trong group để xem danh sách member
-
-Hiện trong group có cụm avatar thành viên ở góc phải.
-
-Yêu cầu:
-
-* Cho phép click vào cụm avatar đó.
-* Khi click, mở modal/drawer hiển thị danh sách thành viên group.
-
-UI mong muốn:
-
-* Tiêu đề: “Thành viên”
-* Danh sách:
-
-  * avatar
-  * tên
-  * email nếu app đang cho phép hiển thị, nếu không thì bỏ
-* Có nút đóng.
-* Mobile thân thiện.
-
-Ví dụ component:
-
-```txt
-GroupMembersDialog
-```
-
-Trigger:
+* Description:
 
 ```tsx
-<button onClick={() => setShowMembers(true)}>
-  <AvatarStack members={group.members} />
-</button>
+text-sm text-slate-500
 ```
 
-Modal:
+Không dùng quá nhiều font-size khác nhau làm UI rối.
+
+Không đổi font global nếu không cần.
+
+---
+
+## 8. Responsive mobile
+
+Kiểm tra kỹ ở mobile width:
+
+```txt
+375px
+390px
+430px
+```
+
+Các lỗi cần tránh:
+
+* Button tràn ngang.
+* Card sát mép màn hình.
+* Text quá dài không xuống dòng.
+* Modal quá rộng.
+* Header bị vỡ.
+* Avatar stack lệch.
+* Form input quá nhỏ.
+* Table/list bị overflow khó chịu.
+
+Có thể dùng:
 
 ```tsx
-<GroupMembersDialog
-  open={showMembers}
-  onClose={() => setShowMembers(false)}
-  members={group.members}
-/>
+flex-col sm:flex-row
+grid grid-cols-1 sm:grid-cols-2
+text-sm sm:text-base
+px-4 sm:px-6
 ```
 
-Yêu cầu:
-
-* Avatar trong modal dùng component `UserAvatar`.
-* Không dùng Next Image optimizer cho avatar.
-* Nếu member có custom avatar thì hiển thị custom.
-* Nếu không có custom avatar thì hiển thị Google avatar/default avatar.
-
-Acceptance:
-
-* Click avatar stack góc phải mở danh sách thành viên.
-* Đóng modal hoạt động.
-* Mobile hiển thị đẹp.
-* Không lỗi ảnh avatar.
+Không được thay đổi flow chỉ để mobile đẹp.
 
 ---
 
-# Phần 8: Cache sync sau profile update/reset
+## 9. Kiểm tra các màn chính
 
-Nếu app dùng SWR:
+Cần polish các màn hiện có:
 
-Sau update profile/reset:
+1. Landing/home page.
+2. Login area nếu có.
+3. Dashboard.
+4. Group list/card.
+5. Group detail.
+6. Add bill form.
+7. Profile page.
+8. Invite/share group UI.
+9. Member/avatar area.
+10. Settlement/payment UI nếu có.
+11. Empty states nếu có.
+12. Loading states nếu có.
 
-```ts
-mutate("/api/me");
-mutate("/api/groups");
-mutate((key) => typeof key === "string" && key.startsWith("/api/groups/"));
-```
-
-Mục tiêu:
-
-* Header đổi ngay.
-* Profile đổi ngay.
-* Dashboard đổi ngay.
-* Group member list đổi ngay.
-* Bill/settlement hiển thị avatar/name mới nếu lấy từ group detail API.
+Không thêm màn mới.
 
 ---
 
-# Test checklist
+## 10. Không làm hỏng state hoặc props
+
+Khi refactor component UI:
+
+* Giữ nguyên props.
+* Giữ nguyên event handlers.
+* Giữ nguyên form name/id nếu đang dùng.
+* Giữ nguyên submit behavior.
+* Giữ nguyên href.
+* Giữ nguyên route.
+* Giữ nguyên API call.
+
+Chỉ được bọc thêm layout hoặc đổi className.
+
+Ví dụ được phép:
+
+```tsx
+<button onClick={handleSave} className="...">
+```
+
+Không được đổi thành logic khác.
+
+---
+
+## 11. Không xóa code logic
+
+Không xóa các đoạn:
+
+* auth check
+* validation
+* mutation
+* error handling
+* redirect
+* permission check
+
+Nếu thấy code xấu nhưng thuộc logic, chỉ ghi chú lại, không sửa trong phase này.
+
+---
+
+## 12. Kiểm tra màu và dark mode
+
+Nếu project có dark mode:
+
+* Đảm bảo mọi text/bg/border có cặp dark tương ứng.
+* Input phải đọc được.
+* Card phải phân biệt nền.
+* Button primary vẫn nổi bật.
+
+Nếu project không có dark mode:
+
+* Không tự thêm dark mode mới.
+* Chỉ đảm bảo giao diện light mode ổn định.
+
+---
+
+## 13. Hạn chế animation
+
+Được phép dùng transition nhẹ:
+
+```tsx
+transition
+hover:shadow-md
+active:scale-[0.99]
+```
+
+Không thêm animation phức tạp, không thêm thư viện animation mới.
+
+---
+
+## 14. Không thêm dependency UI mới nếu không cần
+
+Không tự ý thêm:
+
+* shadcn/ui
+* framer-motion
+* radix mới
+* material UI
+* bootstrap
+* daisyUI
+
+Nếu project đã dùng sẵn thư viện nào thì có thể tận dụng, nhưng không đổi hệ UI.
+
+---
+
+# Quy trình làm
+
+1. Đọc cấu trúc project.
+2. Liệt kê các page/component UI chính.
+3. Xác định các style đang không đồng bộ.
+4. Ưu tiên tạo/chỉnh UI component dùng chung nếu project đã có pattern phù hợp.
+5. Chỉnh từng màn, mỗi lần chỉ sửa class/layout.
+6. Không chạm logic.
+7. Chạy kiểm tra.
+
+---
+
+# Test sau khi sửa
 
 Chạy:
 
@@ -479,33 +455,51 @@ npm run build
 
 Test thủ công:
 
-1. Login bằng Google.
-2. Google avatar GIF vẫn hiển thị.
-3. Upload avatar custom.
-4. Không còn lỗi `INVALID_IMAGE_OPTIMIZE_REQUEST`.
-5. Không còn request 400 từ `/_next/image?.../api/user/avatar`.
-6. Reload trang → avatar custom vẫn còn.
-7. Logout/login lại → avatar custom vẫn còn.
-8. Bấm khôi phục ảnh mặc định → quay lại Google avatar.
-9. Reload/logout/login → vẫn là Google avatar.
-10. Đổi tên custom → toàn app cập nhật.
-11. Khôi phục tên mặc định → quay lại Google name.
-12. Vào group → avatar/name đúng.
-13. Click cụm avatar thành viên góc phải → mở danh sách thành viên.
-14. Mobile view modal thành viên hoạt động tốt.
-15. Không còn lỗi màu/input nếu có đụng UI profile.
+1. Mở home page.
+2. Login.
+3. Dashboard hiển thị đúng.
+4. Vào group.
+5. Mở add bill.
+6. Vào profile.
+7. Test các input trên desktop.
+8. Test các input trên mobile.
+9. Kiểm tra avatar/header/card/button.
+10. Kiểm tra không có lỗi text trùng màu nền.
+11. Kiểm tra không có layout vỡ ngang mobile.
+12. Kiểm tra các button vẫn hoạt động như trước.
+13. Kiểm tra form submit vẫn hoạt động như trước.
+
+---
+
+# Acceptance Criteria
+
+Hoàn thành khi:
+
+* Giao diện nhìn sạch và nhất quán hơn.
+* Không có lỗi font rõ ràng.
+* Không có shadow/border quá lỗi.
+* Input/select/textarea đọc được trên mọi màn.
+* Mobile không vỡ layout.
+* Desktop không bị trống hoặc lệch khó chịu.
+* Không thêm tính năng mới.
+* Không thay đổi flow.
+* Không thay đổi logic.
+* Không thay đổi API/database/auth.
+* Build production thành công.
 
 ---
 
 # Báo cáo sau khi làm xong
 
-Báo lại:
+Hãy báo lại:
 
-1. Đã sửa file nào.
-2. Lý do lỗi `INVALID_IMAGE_OPTIMIZE_REQUEST`.
-3. Avatar hiện dùng `<img>` hay `<Image unoptimized />`.
-4. User model hiện lưu google/custom name/avatar thế nào.
-5. Reset name/avatar hoạt động ra sao.
-6. Các SWR cache key được mutate sau profile update.
-7. Member list modal trong group nằm ở component nào.
-8. Kết quả test build.
+1. Đã chỉnh những page/component nào.
+2. Những thay đổi UI chính là gì.
+3. Có tạo component UI dùng chung nào không.
+4. Đã sửa lỗi input contrast ở đâu.
+5. Đã kiểm tra mobile/desktop chưa.
+6. Có file logic nào bị đụng không. Nếu có, giải thích lý do.
+7. Kết quả `npm run lint` và `npm run build`.
+
+---
+
