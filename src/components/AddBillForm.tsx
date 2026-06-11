@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { ChevronLeft, Receipt, Check, Users, CreditCard, Sparkles, X, Plus, Info } from "lucide-react";
+import { ChevronLeft, Receipt, Check, Users, CreditCard, Sparkles } from "lucide-react";
 import { createBill } from "@/lib/actions/bill";
 import { useRouter } from "next/navigation";
 import Avatar from "@/components/Avatar";
@@ -48,13 +48,13 @@ export default function AddBillForm({
     if (splitType !== "equal" || !totalAmount || selectedParticipants.length === 0) return {};
     
     const amount = Number(totalAmount);
-    const perPerson = Math.floor((amount / selectedParticipants.length));
+    const perPerson = Math.floor((amount / selectedParticipants.length) * 100) / 100;
     const splits: Record<string, number> = {};
     
     let sum = 0;
     selectedParticipants.forEach((id, index) => {
       if (index === selectedParticipants.length - 1) {
-        splits[id] = amount - sum;
+        splits[id] = Math.round((amount - sum) * 100) / 100;
       } else {
         splits[id] = perPerson;
         sum += perPerson;
@@ -72,7 +72,7 @@ export default function AddBillForm({
   const isValid = useMemo(() => {
     if (!description || !totalAmount || selectedParticipants.length === 0) return false;
     if (splitType === "custom") {
-      return Math.abs(customTotal - Number(totalAmount)) < 100; // Allow small rounding error
+      return Math.abs(customTotal - Number(totalAmount)) < 10; // Allow small rounding error up to 10 VND
     }
     return true;
   }, [description, totalAmount, selectedParticipants, splitType, customTotal]);
@@ -84,7 +84,7 @@ export default function AddBillForm({
   };
 
   const handleCustomAmountChange = (id: string, amount: string) => {
-    const val = parseInt(amount) || 0;
+    const val = parseFloat(amount) || 0;
     setCustomAmounts(prev => ({ ...prev, [id]: val }));
   };
 
@@ -111,27 +111,34 @@ export default function AddBillForm({
             const newOcrItems = data.items.map((item: { name: string, price: number }) => ({
               name: item.name,
               price: item.price,
-              selectedMembers: [...selectedParticipants]
+              selectedMembers: selectedParticipants // Default to all selected participants
             }));
             setOcrItems(newOcrItems);
             
             const sum = data.items.reduce((acc: number, item: { price: number }) => acc + item.price, 0);
             setTotalAmount(sum);
-            if (!description) setDescription("Hóa đơn ăn uống ✨");
+            if (!description) setDescription("Hóa đơn từ AI");
             
+            // Switch to custom split and calculate based on OCR immediately
             setSplitType("custom");
             const newAmounts: Record<string, number> = {};
             members.forEach(m => newAmounts[m._id] = 0);
             
             newOcrItems.forEach((item: OCRItem) => {
               if (item.selectedMembers.length > 0) {
-                const splitPrice = Math.floor(item.price / item.selectedMembers.length);
+                const splitPrice = item.price / item.selectedMembers.length;
                 item.selectedMembers.forEach((id: string) => {
                   newAmounts[id] += splitPrice;
                 });
               }
             });
+            
+            Object.keys(newAmounts).forEach(id => {
+              newAmounts[id] = Math.round(newAmounts[id]);
+            });
+            
             setCustomAmounts(newAmounts);
+
           } else {
             setError(data.error || "Không thể nhận diện hóa đơn");
           }
@@ -159,20 +166,27 @@ export default function AddBillForm({
     }
     setOcrItems(newItems);
 
+    // Recalculate custom amounts whenever an OCR item split changes
     const newAmounts: Record<string, number> = {};
     members.forEach(m => newAmounts[m._id] = 0);
     
     newItems.forEach((i: OCRItem) => {
       if (i.selectedMembers.length > 0) {
-        const splitPrice = Math.floor(i.price / i.selectedMembers.length);
+        const splitPrice = i.price / i.selectedMembers.length;
         i.selectedMembers.forEach(id => {
           newAmounts[id] += splitPrice;
         });
       }
     });
+    
+    Object.keys(newAmounts).forEach(id => {
+      newAmounts[id] = Math.round(newAmounts[id]);
+    });
+    
     setCustomAmounts(newAmounts);
     setSplitType("custom");
   };
+
 
   const handleSubmit = async () => {
     if (!isValid) return;
@@ -204,90 +218,91 @@ export default function AddBillForm({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center">
+    <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32">
       {/* Header */}
-      <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4 flex justify-center">
-        <div className="w-full max-w-md flex justify-between items-center">
-          <Link href={`/group/${groupId}`} className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 active:scale-90 transition-transform">
-            <ChevronLeft size={24} />
-          </Link>
-          <h1 className="text-base font-black text-slate-900 uppercase tracking-widest">Thêm hóa đơn</h1>
-          <div className="w-10"></div>
+      <div className="w-full max-w-md flex justify-between items-center mb-6 pt-4">
+        <Link href={`/group/${groupId}`} className="p-2 bg-white rounded-xl shadow-sm border border-gray-100 text-gray-500">
+          <ChevronLeft size={24} />
+        </Link>
+        <h1 className="text-xl font-bold text-gray-900">Thêm hóa đơn</h1>
+        <div className="w-10"></div>
+      </div>
+
+      <div className="w-full max-w-md space-y-6">
+        
+        {/* Info Header with AI Button */}
+        <div className="flex justify-between items-center px-1">
+          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+            <Receipt size={16} />
+            Thông tin hóa đơn
+          </h2>
+          <label className="flex items-center gap-2 bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-transform shadow-sm">
+            <Sparkles size={14} className={isScanning ? "animate-pulse" : ""} />
+            {isScanning ? "Đang quét..." : "Quét hóa đơn bằng AI ✨"}
+            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanBill} disabled={isScanning} />
+          </label>
         </div>
-      </header>
 
-      <main className="w-full max-w-md px-6 pt-8 pb-36 space-y-10">
-        {/* Main Info Card */}
-        <section className="bg-white rounded-[2.5rem] p-8 shadow-xl shadow-slate-200/50 border border-slate-100 space-y-8 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4">
-            <label className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-3 py-2 rounded-xl text-[10px] font-black cursor-pointer active:scale-95 transition-all shadow-sm uppercase tracking-wider">
-              <Sparkles size={14} className={isScanning ? "animate-pulse" : ""} />
-              {isScanning ? "Đang quét..." : "Quét AI ✨"}
-              <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanBill} disabled={isScanning} />
-            </label>
+        {/* Step 1: Info */}
+        <section className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-4">
+          <div className="flex items-center gap-3 border-b border-gray-50 pb-4">
+            <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+              <Receipt size={20} />
+            </div>
+            <input
+              type="text"
+              placeholder="Nội dung (ví dụ: Ăn trưa)"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="flex-1 bg-white text-gray-900 border-none outline-none text-lg font-bold placeholder:text-gray-400 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
+            />
           </div>
-
-          <div className="space-y-6 pt-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] px-1">Nội dung chi tiêu</label>
-              <input
-                type="text"
-                placeholder="Ăn sáng, cafe, taxi..."
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="w-full bg-transparent border-none outline-none text-2xl font-black text-slate-900 placeholder:text-slate-200"
-              />
+          <div className="flex items-center gap-3 pt-2">
+            <div className="w-10 h-10 bg-green-50 rounded-2xl flex items-center justify-center text-green-600 font-black">
+              ₫
             </div>
-            
-            <div className="space-y-1">
-              <label className="text-[10px] font-black text-slate-300 uppercase tracking-[0.2em] px-1">Số tiền (VND)</label>
-              <div className="flex items-baseline gap-2">
-                <span className="text-xl font-black text-indigo-600">₫</span>
-                <input
-                  type="number"
-                  placeholder="0"
-                  value={totalAmount}
-                  onChange={(e) => setTotalAmount(e.target.value === "" ? "" : Number(e.target.value))}
-                  className="w-full bg-transparent border-none outline-none text-5xl font-black text-slate-900 placeholder:text-slate-100 tracking-tighter"
-                />
-              </div>
-            </div>
+            <input
+              type="number"
+              placeholder="Tổng số tiền"
+              value={totalAmount}
+              onChange={(e) => setTotalAmount(e.target.value === "" ? "" : Number(e.target.value))}
+              className="flex-1 bg-white text-gray-900 border-none outline-none text-3xl font-black placeholder:text-gray-400 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
+            />
           </div>
         </section>
 
-        {/* AI Line Items */}
+        {/* AI Line Items Section */}
         {ocrItems.length > 0 && (
-          <section className="space-y-4">
-            <div className="flex items-center justify-between px-1">
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
-                <Sparkles size={14} className="text-indigo-500" />
-                Chi tiết bóc tách AI
-              </h3>
-              <button onClick={() => setOcrItems([])} className="text-[10px] font-bold text-rose-500 uppercase tracking-tighter">Xóa hết</button>
-            </div>
-            <div className="grid grid-cols-1 gap-3">
+          <section className="space-y-3">
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-2">
+              <Sparkles size={16} />
+              Chi tiết món ăn (từ AI)
+            </h2>
+            <div className="space-y-3">
               {ocrItems.map((item, idx) => (
-                <div key={idx} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm space-y-4">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-slate-900 text-sm leading-tight pr-4">{item.name}</span>
-                    <span className="font-black text-indigo-600 text-sm">₫{item.price.toLocaleString()}</span>
+                <div key={idx} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm space-y-3">
+                  <div className="flex justify-between items-start">
+                    <span className="font-bold text-gray-900 leading-tight flex-1 pr-4">{item.name}</span>
+                    <span className="font-black text-indigo-600">₫{item.price.toLocaleString()}</span>
                   </div>
-                  <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                    {members.map(member => {
-                      const isSelected = item.selectedMembers.includes(member._id);
-                      return (
-                        <button
-                          key={member._id}
-                          onClick={() => handleOcrItemMemberToggle(idx, member._id)}
-                          className={`relative w-10 h-10 rounded-full border-2 shrink-0 transition-all ${
-                            isSelected ? "border-indigo-600 scale-110 z-10" : "border-transparent opacity-30 grayscale"
-                          }`}
-                        >
-                          <Avatar src={member.image} name={member.name} size={40} className="rounded-full" />
-                          {isSelected && <div className="absolute -top-1 -right-1 w-4 h-4 bg-indigo-600 rounded-full flex items-center justify-center border border-white"><Check size={10} className="text-white" /></div>}
-                        </button>
-                      );
-                    })}
+                  <div className="pt-2 border-t border-gray-50">
+                    <p className="text-[10px] uppercase font-bold text-gray-400 mb-2 tracking-wider">Ai đã dùng món này?</p>
+                    <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+                      {members.map(member => {
+                        const isSelected = item.selectedMembers.includes(member._id);
+                        return (
+                          <button
+                            key={member._id}
+                            onClick={() => handleOcrItemMemberToggle(idx, member._id)}
+                            className={`w-10 h-10 rounded-full overflow-hidden border-2 shrink-0 transition-all ${
+                              isSelected ? "border-indigo-600 opacity-100 scale-110 shadow-sm" : "border-transparent opacity-40 grayscale"
+                            }`}
+                          >
+                            <Avatar src={member.image} name={member.name} size={40} />
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               ))}
@@ -295,96 +310,93 @@ export default function AddBillForm({
           </section>
         )}
 
-        {/* Paid By Selection */}
-        <section className="space-y-4">
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest px-1">Ai là người trả?</h3>
-          <div className="flex gap-3 overflow-x-auto pb-4 no-scrollbar">
+        {/* Step 2: Paid By */}
+        <section className="space-y-3">
+          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-2">
+            <CreditCard size={16} />
+            Người trả tiền
+          </h2>
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
             {members.map((member) => (
               <button
                 key={member._id}
                 onClick={() => setPaidBy(member._id)}
-                className={`flex flex-col items-center gap-2 p-2 rounded-3xl border-2 transition-all shrink-0 min-w-[80px] ${
+                className={`flex items-center gap-2 px-4 py-3 rounded-2xl border transition-all shrink-0 ${
                   paidBy === member._id 
-                    ? "bg-indigo-600 border-indigo-600 text-white shadow-xl shadow-indigo-200 scale-105" 
-                    : "bg-white border-slate-100 text-slate-400 hover:border-slate-200"
+                    ? "bg-indigo-600 border-indigo-600 text-white shadow-md" 
+                    : "bg-white border-gray-100 text-gray-600"
                 }`}
               >
-                <div className="w-12 h-12 rounded-2xl overflow-hidden shadow-sm">
-                  <Avatar src={member.image} name={member.name} size={48} />
+                <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200">
+                  <Avatar src={member.image} name={member.name} size={24} />
                 </div>
-                <span className="text-[10px] font-black uppercase tracking-tighter truncate w-16 text-center">{member.name.split(' ')[0]}</span>
+                <span className="text-sm font-bold">{member.name.split(' ')[0]}</span>
               </button>
             ))}
           </div>
         </section>
 
-        {/* Split Logic */}
-        <section className="space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Phân chia hóa đơn</h3>
-            <div className="flex bg-slate-200/50 p-1 rounded-xl">
+        {/* Step 3: Participants & Split */}
+        <section className="space-y-3">
+          <div className="flex justify-between items-center px-1">
+            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+              <Users size={16} />
+              Cùng tham gia
+            </h2>
+            <div className="flex bg-gray-100 p-1 rounded-lg">
               <button
                 onClick={() => setSplitType("equal")}
-                className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${
-                  splitType === "equal" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500"
+                className={`px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all ${
+                  splitType === "equal" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400"
                 }`}
               >
-                Đều
+                Chia đều
               </button>
               <button
                 onClick={() => setSplitType("custom")}
-                className={`px-4 py-1.5 text-[10px] font-black uppercase rounded-lg transition-all ${
-                  splitType === "custom" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-500"
+                className={`px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all ${
+                  splitType === "custom" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400"
                 }`}
               >
-                Tùy ý
+                Tùy chỉnh
               </button>
             </div>
           </div>
 
-          <div className="bg-white rounded-[2.5rem] border border-slate-100 shadow-sm overflow-hidden divide-y divide-slate-50">
+          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
             {members.map((member) => {
               const isSelected = selectedParticipants.includes(member._id);
               return (
-                <div key={member._id} className={`flex items-center justify-between p-5 transition-colors ${isSelected ? "bg-white" : "bg-slate-50/30"}`}>
+                <div key={member._id} className="flex items-center justify-between p-4">
                   <button
                     onClick={() => handleParticipantToggle(member._id)}
-                    className="flex items-center gap-4 flex-1 text-left group"
+                    className="flex items-center gap-3 flex-1 text-left"
                   >
                     <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                      isSelected ? "bg-indigo-600 border-indigo-600 text-white shadow-lg shadow-indigo-100" : "border-slate-200 group-hover:border-slate-300"
+                      isSelected ? "bg-indigo-600 border-indigo-600 text-white" : "border-gray-200"
                     }`}>
-                      {isSelected && <Check size={14} strokeWidth={3} />}
+                      {isSelected && <Check size={14} />}
                     </div>
-                    <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-full overflow-hidden border border-slate-100">
-                        <Avatar src={member.image} name={member.name} size={32} />
-                      </div>
-                      <span className={`font-bold text-sm ${isSelected ? "text-slate-900" : "text-slate-300"}`}>
-                        {member.name}
-                      </span>
-                    </div>
+                    <span className={`font-bold text-sm ${isSelected ? "text-gray-900" : "text-gray-300"}`}>
+                      {member.name}
+                    </span>
                   </button>
 
                   {isSelected && (
-                    <div className="animate-in fade-in slide-in-from-right-2 duration-200">
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] font-bold text-gray-300">₫</span>
                       {splitType === "equal" ? (
-                        <div className="flex flex-col items-end">
-                          <span className="text-sm font-black text-slate-900">
-                            ₫{currentSplits[member._id]?.toLocaleString() || 0}
-                          </span>
-                        </div>
+                        <span className="text-sm font-black text-gray-900">
+                          {currentSplits[member._id]?.toLocaleString() || 0}
+                        </span>
                       ) : (
-                        <div className="relative flex items-center">
-                           <span className="absolute left-3 text-[10px] font-black text-indigo-400">₫</span>
-                           <input
-                            type="number"
-                            placeholder="0"
-                            value={customAmounts[member._id] || ""}
-                            onChange={(e) => handleCustomAmountChange(member._id, e.target.value)}
-                            className="w-28 text-right bg-indigo-50 pl-6 pr-3 py-2 rounded-xl outline-none font-black text-indigo-600 text-sm focus:ring-2 focus:ring-indigo-100 transition-all"
-                          />
-                        </div>
+                        <input
+                          type="number"
+                          placeholder="0"
+                          value={customAmounts[member._id] || ""}
+                          onChange={(e) => handleCustomAmountChange(member._id, e.target.value)}
+                          className="w-24 text-right bg-white px-2 py-1 rounded-lg outline-none font-black text-indigo-600 placeholder:text-gray-400 text-sm border border-indigo-100 dark:bg-gray-900 dark:text-indigo-300 dark:placeholder:text-gray-500"
+                        />
                       )}
                     </div>
                   )}
@@ -394,42 +406,28 @@ export default function AddBillForm({
           </div>
           
           {splitType === "custom" && (
-            <div className="px-4 py-2 flex justify-between items-center bg-slate-900/5 rounded-2xl p-4">
-              <div className="flex items-center gap-2 text-slate-400">
-                <Info size={14} />
-                <span className="text-[10px] font-bold uppercase tracking-tight">Đã chia: ₫{customTotal.toLocaleString()}</span>
-              </div>
-              <p className={`text-xs font-black uppercase tracking-tighter ${Math.abs(customTotal - Number(totalAmount)) < 100 ? "text-emerald-500" : "text-rose-500"}`}>
-                {Math.abs(customTotal - Number(totalAmount)) < 100 ? "✓ Hợp lệ" : `Thiếu ₫${(Number(totalAmount) - customTotal).toLocaleString()}`}
+            <div className="px-4 py-2 flex justify-between items-center">
+              <p className="text-xs font-bold text-gray-400">Đã chia: ₫{customTotal.toLocaleString()}</p>
+              <p className={`text-xs font-bold ${Math.abs(customTotal - Number(totalAmount)) < 10 ? "text-green-500" : "text-red-500"}`}>
+                Còn lại: ₫{(Number(totalAmount) - customTotal).toLocaleString()}
               </p>
             </div>
           )}
         </section>
 
-        {error && (
-          <div className="bg-rose-50 text-rose-500 p-4 rounded-2xl text-xs font-bold text-center border border-rose-100 animate-bounce">
-            {error}
-          </div>
-        )}
-      </main>
+        {error && <p className="text-red-500 text-xs font-bold text-center">{error}</p>}
+      </div>
 
-      {/* Fixed Action Button */}
-      <div className="fixed bottom-8 w-full max-w-md px-6 z-40">
+      {/* Fixed Bottom Action */}
+      <div className="fixed bottom-8 w-full max-w-md px-6">
         <button
           onClick={handleSubmit}
           disabled={!isValid || isPending}
-          className="w-full flex items-center justify-center gap-3 bg-slate-900 text-white py-5 rounded-2xl font-black text-lg shadow-2xl shadow-slate-300 active:scale-95 transition-all disabled:opacity-30 disabled:active:scale-100 hover:bg-slate-800"
+          className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
         >
-          {isPending ? (
-            <div className="w-6 h-6 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
-          ) : (
-            <>
-              <Check size={24} />
-              XÁC NHẬN HÓA ĐƠN
-            </>
-          )}
+          {isPending ? "Đang lưu..." : "Xác nhận"}
         </button>
       </div>
-    </div>
+    </main>
   );
 }

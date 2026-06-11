@@ -1,55 +1,36 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
+import { useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
-import { simplifyDebts, type Bill } from "@/lib/utils/debt";
+import { simplifyDebts } from "@/lib/utils/debt";
 import GroupInviteQR from "@/components/GroupInviteQR";
+import GroupMembersDialog from "@/components/GroupMembersDialog";
 import Link from "next/link";
-import { ChevronLeft, Plus, Receipt, ArrowRight, Landmark, Trash2, CheckCircle2, Clock, LogOut, Settings, Wallet, UserCircle } from "lucide-react";
+import { ChevronLeft, Plus, Receipt, Landmark, Trash2, CheckCircle2, Clock, LogOut } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { useRouter } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
 import { deleteGroup, leaveGroup } from "@/lib/actions/group";
 import { markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
-
-interface IMember {
-  _id: string;
-  name: string;
-  image?: string;
-}
-
-interface IBillWithPayer extends Omit<Bill, 'paidBy'> {
-  _id: string;
-  description: string;
-  createdAt: string;
-  paidBy: {
-    _id: string;
-    name: string;
-    image?: string;
-  };
-}
-
-interface ISettlement {
-  _id: string;
-  from: IMember;
-  to: IMember;
-  amount: number;
-  status: 'pending' | 'completed';
-  paidAt?: string;
-  completedAt?: string;
-}
+import type { BillWithPayer, GroupDetailData, GroupMember, Settlement } from "@/lib/money-types";
 
 export default function GroupClient({ 
   groupId,
   userId,
-  initialData 
+  initialData,
+  onBackToDashboard,
 }: { 
   groupId: string,
   userId: string,
-  initialData: { group: any, bills: IBillWithPayer[], settlements: ISettlement[] }
+  initialData?: GroupDetailData,
+  onBackToDashboard?: () => void,
 }) {
   const router = useRouter();
-  const { data, mutate, isValidating } = useSWR<{ group: any, bills: IBillWithPayer[], settlements: ISettlement[] }>(
+  const [showMembers, setShowMembers] = useState(false);
+  const { mutate: mutateGlobal } = useSWRConfig();
+  const { data, error, mutate, isLoading, isValidating } = useSWR<GroupDetailData>(
     `/api/groups/${groupId}`, 
     fetcher, 
     {
@@ -59,180 +40,222 @@ export default function GroupClient({
     }
   );
 
-  const { group, bills, settlements } = data || initialData;
+  const detail = data || initialData;
+
+  const goDashboard = () => {
+    if (onBackToDashboard) {
+      onBackToDashboard();
+    } else {
+      router.push("/dashboard");
+    }
+  };
+
+  if (!detail && isLoading) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32 w-full">
+        <div className="w-full max-w-md flex items-center gap-3 mb-6 pt-4">
+          <BackToDashboard onBackToDashboard={onBackToDashboard} />
+          <div className="space-y-2">
+            <div className="h-5 w-32 rounded-lg bg-gray-200 animate-pulse" />
+            <div className="h-3 w-20 rounded-lg bg-gray-100 animate-pulse" />
+          </div>
+        </div>
+        <div className="w-full max-w-md space-y-4">
+          <div className="h-24 rounded-3xl bg-white border border-gray-100 shadow-sm animate-pulse" />
+          <div className="h-40 rounded-3xl bg-white border border-gray-100 shadow-sm animate-pulse" />
+          <div className="h-32 rounded-3xl bg-white border border-gray-100 shadow-sm animate-pulse" />
+        </div>
+      </main>
+    );
+  }
+
+  if (!detail) {
+    const message = error instanceof Error ? error.message : "Khong the tai du lieu nhom";
+    return (
+      <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32 w-full">
+        <div className="w-full max-w-md flex items-center gap-3 mb-6 pt-4">
+          <BackToDashboard onBackToDashboard={onBackToDashboard} />
+          <p className="text-sm font-bold text-red-500">{message}</p>
+        </div>
+      </main>
+    );
+  }
+
+  const { group, bills, settlements } = detail;
   
   if (!group) return null;
 
-  const isCreator = group.createdBy === userId;
+  const isCreator = group.createdBy.toString() === userId;
 
   const completedSettlements = settlements
-    .filter((s: ISettlement) => s.status === 'completed')
-    .map((s: ISettlement) => ({
+    .filter((s: Settlement) => s.status === 'completed')
+    .map((s: Settlement) => ({
       from: s.from._id,
       to: s.to._id,
       amount: s.amount
     }));
 
-  const memberIds = group.members.map((m: IMember) => m._id);
+  const memberIds = group.members.map((m: GroupMember) => m._id);
   const transactions = simplifyDebts(
-    bills.map((b: IBillWithPayer) => ({
+    bills.map((b: BillWithPayer) => ({
       ...b,
-      paidBy: typeof b.paidBy === 'string' ? b.paidBy : b.paidBy._id
+      paidBy: b.paidBy._id
     })), 
     memberIds,
     completedSettlements
   );
 
+  // Filter transactions involving the current user
   const userOwes = transactions.filter(t => t.from === userId);
   const owedToUser = transactions.filter(t => t.to === userId);
-  const pendingSettlements = settlements.filter((s: ISettlement) => s.status === 'pending');
+  const pendingSettlements = settlements.filter((s: Settlement) => s.status === 'pending');
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col items-center">
-      {/* Dynamic Navigation Bar */}
-      <header className="sticky top-0 z-30 w-full bg-white/80 backdrop-blur-xl border-b border-slate-200/60 px-6 py-4 flex justify-center">
-        <div className="w-full max-w-md flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <Link href="/dashboard" className="w-10 h-10 bg-slate-50 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-100 transition-colors active:scale-90">
-              <ChevronLeft size={24} />
-            </Link>
-            <div className="flex flex-col">
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-base font-black text-slate-900 truncate max-w-[140px] leading-none">{group.name}</h1>
-                {isValidating && <div className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></div>}
-              </div>
-              <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{group.members.length} thành viên</p>
+    <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32 w-full">
+      {/* Header */}
+      <div className="w-full max-w-md flex justify-between items-center mb-6 pt-4">
+        <div className="flex items-center gap-3">
+          <BackToDashboard onBackToDashboard={onBackToDashboard} />
+          <div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-bold text-gray-900 truncate max-w-[150px] leading-tight">{group.name}</h1>
+              {isValidating && <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>}
             </div>
-          </div>
-          
-          <div className="flex items-center gap-2">
-            <div className="flex -space-x-2 mr-2">
-              {group.members.slice(0, 3).map((member: IMember) => (
-                <div key={member._id} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden shadow-sm bg-slate-200">
-                  <Avatar src={member.image} name={member.name} size={32} />
-                </div>
-              ))}
-            </div>
-            {isCreator ? (
-              <ActionButton 
-                action={async () => {
-                  if (confirm("Bạn có chắc chắn muốn xóa nhóm này?")) {
-                    await deleteGroup(groupId);
-                    router.push("/dashboard");
-                  }
-                }}
-                variant="danger"
-                className="w-10 h-10 p-0 rounded-xl border-none bg-rose-50 text-rose-500 hover:bg-rose-100"
-                loadingText=""
-              >
-                <Trash2 size={20} />
-              </ActionButton>
-            ) : (
-              <ActionButton 
-                action={async () => {
-                  await leaveGroup(groupId);
-                  router.push("/dashboard");
-                }}
-                variant="danger"
-                className="w-10 h-10 p-0 rounded-xl border-none bg-slate-100 text-slate-500"
-                loadingText=""
-              >
-                <LogOut size={20} />
-              </ActionButton>
-            )}
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+              {group.members.length} thành viên
+            </p>
           </div>
         </div>
-      </header>
+        <div className="flex items-center gap-2">
+          {isCreator ? (
+            <ActionButton 
+              action={async () => {
+                await deleteGroup(groupId);
+                mutateGlobal(`/api/groups/${groupId}`, undefined, { revalidate: false });
+                await mutateGlobal("/api/groups");
+                goDashboard();
+              }}
+              variant="danger"
+              className="p-2 w-auto h-auto rounded-xl"
+              loadingText=""
+            >
+              <Trash2 size={20} />
+            </ActionButton>
+          ) : (
+            <ActionButton 
+              action={async () => {
+                await leaveGroup(groupId);
+                mutateGlobal(`/api/groups/${groupId}`, undefined, { revalidate: false });
+                await mutateGlobal("/api/groups");
+                goDashboard();
+              }}
+              variant="danger"
+              className="p-2 w-auto h-auto rounded-xl"
+              loadingText=""
+            >
+              <LogOut size={20} />
+            </ActionButton>
+          )}
+          <button
+            type="button"
+            onClick={() => setShowMembers(true)}
+            className="flex -space-x-2 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            aria-label="Xem danh sách thành viên"
+          >
+            {group.members.slice(0, 3).map((member: GroupMember) => (
+              <div key={member._id} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-gray-200">
+                <Avatar src={member.image} name={member.name} size={32} />
+              </div>
+            ))}
+            {group.members.length > 3 && (
+              <span className="flex h-8 min-w-8 items-center justify-center rounded-full border-2 border-white bg-gray-100 px-1.5 text-[10px] font-black text-gray-500">
+                +{group.members.length - 3}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
 
-      <main className="w-full max-w-md px-6 pt-8 pb-36 space-y-10">
-        {/* Advanced Balance Header */}
-        <section className="bg-indigo-600 rounded-[2.5rem] p-8 text-white shadow-2xl shadow-indigo-200 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full blur-3xl -mr-16 -mt-16"></div>
-          <div className="relative z-10 flex flex-col items-center space-y-6">
-            <div className="flex flex-col items-center space-y-1">
-              <span className="text-[10px] font-black uppercase tracking-[0.2em] text-white/60">Tổng số dư của bạn</span>
-              <div className="flex items-baseline gap-1">
-                <span className="text-sm font-bold text-white/80">₫</span>
-                <h2 className="text-4xl font-black tracking-tighter">
-                  {(owedToUser.reduce((acc, t) => acc + t.amount, 0) - userOwes.reduce((acc, t) => acc + t.amount, 0)).toLocaleString()}
-                </h2>
-              </div>
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4 w-full pt-4 border-t border-white/10">
-              <div className="flex flex-col items-center">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-white/50 mb-1">Cần trả</span>
-                <span className="text-lg font-black text-rose-200">₫{userOwes.reduce((acc, t) => acc + t.amount, 0).toLocaleString()}</span>
-              </div>
-              <div className="w-px h-full bg-white/10 mx-auto"></div>
-              <div className="flex flex-col items-center">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-white/50 mb-1">Cần nhận</span>
-                <span className="text-lg font-black text-emerald-200">₫{owedToUser.reduce((acc, t) => acc + t.amount, 0).toLocaleString()}</span>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Smart Settlement Section */}
+      <div className="w-full max-w-md space-y-6">
+        {/* Advanced Settlement Summary */}
         <section className="space-y-4">
-          <div className="flex items-center gap-2 px-1">
-            <Landmark size={14} className="text-slate-400" />
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Quyết toán thông minh</h3>
+          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-2">
+            <Landmark size={16} />
+            Quyết toán thông minh
+          </h2>
+          
+          <div className="grid grid-cols-2 gap-3">
+            <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cần trả</p>
+              <p className="text-xl font-black text-red-500">
+                ₫{userOwes.reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
+              </p>
+            </div>
+            <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cần nhận</p>
+              <p className="text-xl font-black text-green-500">
+                ₫{owedToUser.reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
+              </p>
+            </div>
           </div>
 
-          {(userOwes.length > 0 || owedToUser.length > 0) ? (
-            <div className="grid grid-cols-1 gap-3">
-              {/* People You Owe */}
+          {owedToUser.length > 0 && (
+            <p className="text-[10px] font-bold text-indigo-500 px-1 italic">
+              ✨ Có {owedToUser.length} người đang còn thiếu tiền bạn.
+            </p>
+          )}
+
+          {(userOwes.length > 0 || owedToUser.length > 0 || pendingSettlements.length > 0) ? (
+            <div className="space-y-3">
+              {/* Debt Details */}
               {userOwes.map((t, idx) => {
-                const toMember = group.members.find((m: IMember) => m._id === t.to);
-                const isPending = pendingSettlements.some((s: ISettlement) => s.from._id === userId && s.to._id === t.to);
+                const toMember = group.members.find((m: GroupMember) => m._id === t.to);
+                const isPending = pendingSettlements.some((s: Settlement) => s.from._id === userId && s.to._id === t.to);
                 
                 return (
-                  <div key={`owe-${idx}`} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl overflow-hidden bg-slate-100 p-0.5 border border-slate-50">
-                        <Avatar src={toMember?.image} name={toMember?.name || "User"} size={48} />
+                  <div key={`owe-${idx}`} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border">
+                        <Avatar src={toMember?.image} name={toMember?.name || "User"} size={40} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-900">Trả <span className="text-indigo-600">{toMember?.name.split(' ')[0]}</span></p>
-                        <p className="text-xs font-black text-rose-500">₫{t.amount.toLocaleString()}</p>
+                        <p className="text-sm font-bold text-gray-900">Bạn nợ <span className="text-indigo-600">{toMember?.name.split(' ')[0]}</span></p>
+                        <p className="text-xs font-bold text-red-500">-₫{t.amount.toLocaleString()}</p>
                       </div>
                     </div>
                     {isPending ? (
-                      <div className="flex items-center gap-1.5 text-[10px] font-black text-amber-500 bg-amber-50 px-4 py-2.5 rounded-xl border border-amber-100 uppercase tracking-tighter">
-                        <Clock size={12} className="animate-spin" />
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-amber-500 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100">
+                        <Clock size={12} />
                         Đang chờ...
                       </div>
                     ) : (
                       <ActionButton 
                         action={async () => {
                           await markAsPaid(groupId, t.to, t.amount);
-                          mutate();
+                          await mutate();
                         }}
-                        className="bg-indigo-600 text-white px-5 py-2.5 rounded-xl text-[11px] font-black shadow-lg shadow-indigo-100"
-                        loadingText="Đang gửi"
+                        className="px-4 py-2 text-xs"
                       >
-                        GỬI TIỀN
+                        Đã trả
                       </ActionButton>
                     )}
                   </div>
                 );
               })}
 
-              {/* People Who Owe You */}
               {owedToUser.map((t, idx) => {
-                const fromMember = group.members.find((m: IMember) => m._id === t.from);
-                const pending = pendingSettlements.find((s: ISettlement) => s.from._id === t.from && s.to._id === userId);
+                const fromMember = group.members.find((m: GroupMember) => m._id === t.from);
+                const pending = pendingSettlements.find((s: Settlement) => s.from._id === t.from && s.to._id === userId);
 
                 return (
-                  <div key={`receive-${idx}`} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl overflow-hidden bg-slate-100 p-0.5 border border-slate-50">
-                        <Avatar src={fromMember?.image} name={fromMember?.name || "User"} size={48} />
+                  <div key={`receive-${idx}`} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border">
+                        <Avatar src={fromMember?.image} name={fromMember?.name || "User"} size={40} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-900"><span className="text-indigo-600">{fromMember?.name.split(' ')[0]}</span> nợ bạn</p>
-                        <p className="text-xs font-black text-emerald-500">+₫{t.amount.toLocaleString()}</p>
+                        <p className="text-sm font-bold text-gray-900"><span className="text-indigo-600">{fromMember?.name.split(' ')[0]}</span> nợ bạn</p>
+                        <p className="text-xs font-bold text-green-500">+₫{t.amount.toLocaleString()}</p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -241,26 +264,26 @@ export default function GroupClient({
                           <ActionButton 
                             action={async () => {
                               await confirmReceived(groupId, pending._id);
-                              mutate();
+                              await mutate();
                             }}
                             variant="success"
-                            className="bg-emerald-500 text-white px-5 py-2.5 rounded-xl text-[11px] font-black shadow-lg shadow-emerald-100"
-                            loadingText="Đang lưu"
+                            className="px-4 py-2 text-xs"
                           >
-                            XÁC NHẬN
+                            <CheckCircle2 size={12} />
+                            Xác nhận
                           </ActionButton>
-                          <p className="text-[8px] text-amber-500 font-bold uppercase tracking-tighter">Đã trả lúc {new Date(pending.paidAt!).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
+                          <p className="text-[8px] text-amber-500 font-bold">Đã trả: {new Date(pending.paidAt!).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
                         </>
                       ) : (
                         <ActionButton 
                           action={async () => {
                             await directConfirm(groupId, t.from, t.amount);
-                            mutate();
+                            await mutate();
                           }}
                           variant="secondary"
-                          className="bg-slate-50 text-slate-500 border border-slate-100 px-4 py-2 rounded-xl text-[10px] font-black"
+                          className="px-4 py-2 text-xs"
                         >
-                          ĐÃ NHẬN
+                          Đã nhận tiền
                         </ActionButton>
                       )}
                     </div>
@@ -269,75 +292,92 @@ export default function GroupClient({
               })}
             </div>
           ) : (
-            <div className="bg-emerald-50/50 p-10 rounded-[2.5rem] text-center border border-emerald-100/50 space-y-2">
-              <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto text-emerald-600">
-                <CheckCircle2 size={24} />
-              </div>
-              <p className="text-emerald-700 font-black text-sm uppercase tracking-wider italic">Nhóm sạch nợ!</p>
+            <div className="bg-green-50 p-6 rounded-3xl text-center border border-green-100">
+              <p className="text-green-700 font-bold text-sm">Nhóm hiện đang hòa vốn, không có nợ!</p>
             </div>
           )}
         </section>
 
-        {/* Activity Feed / Bills */}
-        <section className="space-y-4 pb-12">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2">
-              <Receipt size={14} className="text-slate-400" />
-              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Hoạt động gần đây</h3>
-            </div>
-            <span className="bg-slate-100 text-slate-500 text-[10px] font-black px-2 py-0.5 rounded-full">
-              {bills.length}
-            </span>
-          </div>
+        {/* Recent Bills */}
+        <section className="space-y-3">
+          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-2">
+            <Receipt size={16} />
+            Hóa đơn gần đây
+          </h2>
 
           {bills.length > 0 ? (
-            <div className="space-y-4">
-              {bills.map((bill: IBillWithPayer) => (
-                <div key={bill._id} className="bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm flex items-center justify-between transition-transform active:scale-[0.98]">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400">
-                      <Receipt size={24} />
+            <div className="space-y-3">
+              {bills.map((bill: BillWithPayer) => (
+                <div key={bill._id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400">
+                      <Receipt size={20} />
                     </div>
                     <div>
-                      <h4 className="font-bold text-slate-900 text-base leading-tight mb-1">{bill.description}</h4>
-                      <div className="flex items-center gap-2">
-                        <div className="w-4 h-4 rounded-full overflow-hidden">
-                          <Avatar src={bill.paidBy.image} name={bill.paidBy.name} size={16} />
-                        </div>
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-                          {bill.paidBy.name.split(' ')[0]} trả • {new Date(bill.createdAt).toLocaleDateString('vi-VN')}
-                        </p>
+                      <h4 className="font-bold text-gray-900 leading-tight">{bill.description}</h4>
+                      <div className="flex items-center gap-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                        <span>{bill.paidBy.name.split(' ')[0]} trả</span>
+                        <span>•</span>
+                        <span className="flex items-center gap-1">
+                          <Clock size={10} />
+                          {new Date(bill.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {new Date(bill.createdAt).toLocaleDateString('vi-VN')}
+                        </span>
                       </div>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end">
-                    <span className="font-black text-slate-900 text-lg">₫{bill.totalAmount.toLocaleString()}</span>
-                    <span className="text-[8px] font-bold text-slate-300 uppercase tracking-tighter">Hóa đơn</span>
-                  </div>
+                  <span className="font-black text-gray-900">₫{bill.totalAmount.toLocaleString()}</span>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="bg-white p-12 rounded-[2.5rem] text-center border border-slate-100 shadow-sm">
-              <p className="text-slate-300 font-bold text-xs italic tracking-wide">Mọi người chưa chi tiêu gì...</p>
+            <div className="bg-white p-8 rounded-3xl text-center border-2 border-dashed border-gray-100">
+              <p className="text-gray-400 font-medium text-sm">Chưa có hóa đơn nào được tạo.</p>
             </div>
           )}
         </section>
 
-        {/* Share & Invite Section */}
+        {/* Invite Section */}
         <GroupInviteQR inviteCode={group.inviteCode} groupName={group.name} />
-      </main>
+      </div>
 
-      {/* Floating Action Button */}
-      <div className="fixed bottom-8 w-full max-w-md px-6 z-40">
+      {/* Fixed Bottom Action */}
+      <div className="fixed bottom-8 w-full max-w-md px-6">
         <Link
           href={`/group/${groupId}/add-bill`}
-          className="flex items-center justify-center gap-3 bg-slate-900 text-white py-5 rounded-2xl font-black text-lg shadow-2xl shadow-slate-300 active:scale-95 transition-all hover:bg-slate-800"
+          className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-5 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform"
         >
           <Plus size={24} />
-          THÊM HÓA ĐƠN
+          Thêm hóa đơn mới
         </Link>
       </div>
-    </div>
+
+      <GroupMembersDialog
+        open={showMembers}
+        onClose={() => setShowMembers(false)}
+        members={group.members}
+      />
+    </main>
+  );
+}
+
+function BackToDashboard({
+  onBackToDashboard,
+}: {
+  onBackToDashboard?: () => void;
+}) {
+  const className = "p-2 bg-white rounded-xl shadow-sm border border-gray-100 text-gray-500 active:scale-95 transition-transform";
+
+  if (onBackToDashboard) {
+    return (
+      <button type="button" onClick={onBackToDashboard} className={className} aria-label="Back to dashboard">
+        <ChevronLeft size={24} />
+      </button>
+    );
+  }
+
+  return (
+    <Link href="/dashboard" className={className} aria-label="Back to dashboard">
+      <ChevronLeft size={24} />
+    </Link>
   );
 }

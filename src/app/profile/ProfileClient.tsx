@@ -1,25 +1,67 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useSession } from "next-auth/react";
-import { Camera, Save, LogOut, Upload, User, Mail, ShieldCheck } from "lucide-react";
-import Image from "next/image";
-import { updateUserProfile } from "@/lib/actions/user";
+import { RotateCcw, Save, Upload } from "lucide-react";
+import { useSWRConfig } from "swr";
 import Avatar from "@/components/Avatar";
+import { getGroupDetailCachePredicate, type PublicUser } from "@/lib/current-user";
+import { useCurrentUser } from "@/lib/use-current-user";
 
-export default function ProfileClient({ 
-  initialName, 
-  initialImage,
-  email
-}: { 
-  initialName: string;
-  initialImage: string;
-  email: string;
+export default function ProfileClient({
+  initialUser,
+}: {
+  initialUser: PublicUser;
 }) {
   const { update } = useSession();
-  const [name, setName] = useState(initialName);
-  const [image, setImage] = useState(initialImage);
+  const { mutate } = useSWRConfig();
+  const { user } = useCurrentUser(initialUser);
+  const [name, setName] = useState(initialUser.name);
+  const [image, setImage] = useState(initialUser.image || "");
+  const [imageChanged, setImageChanged] = useState(false);
   const [isPending, startTransition] = useTransition();
+
+  const syncProfileCaches = async (nextUser: PublicUser) => {
+    setName(nextUser.name);
+    setImage(nextUser.image || "");
+    setImageChanged(false);
+
+    await update({ name: nextUser.name, image: nextUser.image });
+    await mutate("/api/me", { user: nextUser }, { revalidate: false });
+    await mutate("/api/me");
+    await mutate("/api/groups");
+    await mutate(getGroupDetailCachePredicate());
+  };
+
+  const patchProfile = async (body: Record<string, unknown>) => {
+    const response = await fetch("/api/me", {
+      method: "PATCH",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
+    });
+
+    const payload = (await response.json().catch(() => ({}))) as {
+      user?: PublicUser;
+      error?: string;
+    };
+
+    if (!response.ok || !payload.user) {
+      throw new Error(payload.error || "Không thể cập nhật hồ sơ");
+    }
+
+    return payload.user;
+  };
+
+  useEffect(() => {
+    if (!user || isPending) return;
+    // Sync the editable form after /api/me replaces the session fallback.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setName(user.name);
+    setImage(user.image || "");
+    setImageChanged(false);
+  }, [user, isPending]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -33,6 +75,7 @@ export default function ProfileClient({
     const reader = new FileReader();
     reader.onloadend = () => {
       setImage(reader.result as string);
+      setImageChanged(true);
     };
     reader.readAsDataURL(file);
   };
@@ -40,92 +83,132 @@ export default function ProfileClient({
   const handleUpdate = () => {
     startTransition(async () => {
       try {
-        await updateUserProfile(name, image);
-        await update({ name, image }); // Sync session
+        const trimmedName = name.trim();
+        if (!trimmedName) {
+          alert("Tên hiển thị là bắt buộc.");
+          return;
+        }
+
+        const updateBody: Record<string, unknown> = {};
+        if (trimmedName !== (user?.name || initialUser.name)) {
+          updateBody.name = trimmedName;
+        }
+        if (imageChanged) {
+          updateBody.image = image;
+        }
+        if (Object.keys(updateBody).length === 0) {
+          alert("Không có thay đổi để lưu.");
+          return;
+        }
+
+        const nextUser = await patchProfile(updateBody);
+        await syncProfileCaches(nextUser);
         alert("Cập nhật thành công!");
-      } catch (error: any) {
-        alert(error.message || "Đã có lỗi xảy ra");
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Đã có lỗi xảy ra";
+        alert(message);
+      }
+    });
+  };
+
+  const handleResetName = () => {
+    startTransition(async () => {
+      try {
+        const nextUser = await patchProfile({ resetName: true });
+        await syncProfileCaches(nextUser);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Đã có lỗi xảy ra";
+        alert(message);
+      }
+    });
+  };
+
+  const handleResetImage = () => {
+    startTransition(async () => {
+      try {
+        const nextUser = await patchProfile({ resetImage: true });
+        await syncProfileCaches(nextUser);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Đã có lỗi xảy ra";
+        alert(message);
       }
     });
   };
 
   return (
-    <div className="w-full max-w-md space-y-10">
-      {/* Profile Info Header */}
-      <div className="flex flex-col items-center space-y-6">
-        <div className="relative group">
-          <div className="w-36 h-32 relative">
-             <div className="w-32 h-32 rounded-[2.5rem] overflow-hidden border-4 border-white shadow-2xl bg-slate-100 mx-auto">
-              <Avatar src={image} name={name || "U"} size={128} />
-            </div>
-            <label className="absolute bottom-0 right-2 p-3 bg-indigo-600 rounded-2xl text-white border-4 border-white shadow-xl cursor-pointer active:scale-90 transition-all hover:bg-indigo-700">
-              <Camera size={20} />
-              <input 
-                type="file" 
-                accept="image/*" 
-                className="hidden" 
-                onChange={handleImageUpload}
-                disabled={isPending}
-              />
-            </label>
+    <div className="w-full max-w-md space-y-8">
+      <div className="flex flex-col items-center space-y-4">
+        <div className="relative">
+          <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gray-200">
+            <Avatar src={image} name={name || "User"} size={128} />
           </div>
+          <label className="absolute bottom-0 right-0 p-2 bg-indigo-600 rounded-full text-white border-2 border-white shadow-lg cursor-pointer active:scale-95 transition-transform">
+            <Upload size={20} />
+            <input
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={handleImageUpload}
+              disabled={isPending}
+            />
+          </label>
         </div>
-        <div className="text-center space-y-1">
-          <h2 className="text-2xl font-black text-slate-900 leading-tight">{name}</h2>
-          <div className="flex items-center justify-center gap-1.5 text-slate-400">
-            <Mail size={12} />
-            <p className="text-xs font-bold uppercase tracking-wider">{email}</p>
-          </div>
+        <div className="text-center">
+          <h2 className="text-2xl font-black text-gray-900">{name}</h2>
+          <p className="text-sm font-medium text-gray-400">{user?.email}</p>
         </div>
       </div>
 
-      {/* Form Card */}
-      <div className="space-y-8">
-        <div className="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-xl shadow-slate-200/40 space-y-8">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2 px-1">
-              <User size={14} className="text-slate-400" />
-              <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Thông tin cá nhân</h3>
-            </div>
-            
-            <div className="space-y-2">
-              <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1 ml-1">Tên hiển thị</label>
+      <div className="space-y-6">
+        <div className="space-y-4">
+          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Tên hiển thị</label>
               <input
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 disabled={isPending}
-                className="w-full bg-slate-50 px-5 py-4 rounded-2xl border border-transparent outline-none focus:bg-white focus:border-indigo-600 transition-all font-bold text-slate-900 disabled:opacity-50"
+                className="w-full bg-white text-gray-900 placeholder:text-gray-400 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-colors font-bold disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
                 placeholder="Nhập tên của bạn"
               />
             </div>
           </div>
-
-          <div className="pt-4 border-t border-slate-50 flex items-center gap-3">
-             <div className="w-10 h-10 bg-emerald-50 rounded-xl flex items-center justify-center text-emerald-600">
-                <ShieldCheck size={20} />
-             </div>
-             <div className="flex-1">
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-tight">Trạng thái tài khoản</p>
-                <p className="text-xs font-black text-slate-900 uppercase">Đã xác thực Google</p>
-             </div>
-          </div>
         </div>
 
-        <button
-          onClick={handleUpdate}
-          disabled={isPending || !name.trim()}
-          className="w-full flex items-center justify-center gap-3 bg-indigo-600 text-white py-5 rounded-[1.5rem] font-black text-lg shadow-2xl shadow-indigo-200 active:scale-[0.98] transition-all disabled:opacity-50 disabled:active:scale-100 hover:bg-indigo-700"
-        >
-          {isPending ? (
-             <div className="w-6 h-6 border-4 border-white/20 border-t-white rounded-full animate-spin"></div>
-          ) : (
-            <>
-              <Save size={24} />
-              LƯU THAY ĐỔI
-            </>
+        <div className="space-y-3">
+          <button
+            type="button"
+            onClick={handleUpdate}
+            disabled={isPending || !name.trim()}
+            className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100"
+          >
+            <Save size={24} />
+            {isPending ? "Đang lưu..." : "Lưu thay đổi"}
+          </button>
+          {user?.customName && (
+            <button
+              type="button"
+              onClick={handleResetName}
+              disabled={isPending}
+              className="w-full flex items-center justify-center gap-2 bg-white text-gray-600 py-3 rounded-2xl font-bold text-sm shadow-sm border border-gray-100 active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100"
+            >
+              <RotateCcw size={18} />
+              Khôi phục tên mặc định
+            </button>
           )}
-        </button>
+          {user?.customImage && (
+            <button
+              type="button"
+              onClick={handleResetImage}
+              disabled={isPending}
+              className="w-full flex items-center justify-center gap-2 bg-white text-gray-600 py-3 rounded-2xl font-bold text-sm shadow-sm border border-gray-100 active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100"
+            >
+              <RotateCcw size={18} />
+              Khôi phục ảnh mặc định
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );

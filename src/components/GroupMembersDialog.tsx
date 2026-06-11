@@ -3,13 +3,7 @@
 import { useEffect } from "react";
 import { X } from "lucide-react";
 import Avatar from "@/components/Avatar";
-
-interface GroupMember {
-  _id: string;
-  name: string;
-  image?: string;
-  email?: string;
-}
+import type { GroupMember } from "@/lib/money-types";
 
 export default function GroupMembersDialog({
   open,
