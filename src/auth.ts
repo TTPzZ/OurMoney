@@ -1,5 +1,5 @@
 import NextAuth, { type DefaultSession } from "next-auth"
-import Facebook from "next-auth/providers/facebook"
+import Google from "next-auth/providers/google"
 import connectDB from "./lib/db"
 import User from "./models/User"
 
@@ -13,30 +13,30 @@ declare module "next-auth" {
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
-    Facebook({
-      clientId: process.env.AUTH_FACEBOOK_ID,
-      clientSecret: process.env.AUTH_FACEBOOK_SECRET,
+    Google({
+      clientId: process.env.AUTH_GOOGLE_ID,
+      clientSecret: process.env.AUTH_GOOGLE_SECRET,
     }),
   ],
   callbacks: {
     async signIn({ user, account, profile }) {
-      if (account?.provider === "facebook") {
+      if (account?.provider === "google") {
         try {
           await connectDB();
-          const facebookId = profile?.id as string;
+          const googleId = profile?.sub as string;
           
-          if (!facebookId) return false;
+          if (!googleId) return false;
 
-          const existingUser = await User.findOne({ facebookId });
+          const existingUser = await User.findOne({ googleId });
           if (!existingUser) {
             await User.create({
               name: user.name,
               email: user.email,
               image: user.image,
-              facebookId,
+              googleId,
             });
           } else {
-            // Sync latest name and image from Facebook
+            // Sync latest name and image from Google
             existingUser.name = user.name as string;
             existingUser.image = user.image as string;
             if (user.email) existingUser.email = user.email;
@@ -44,15 +44,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
           return true;
         } catch (error) {
-          console.error("Error during Facebook sign in sync:", error);
+          console.error("Error during Google sign in sync:", error);
           return false;
         }
       }
       return true;
     },
     async jwt({ token, account, profile }) {
-      if (account && profile && account.provider === "facebook") {
-        token.sub = profile.id as string;
+      if (account && profile && account.provider === "google") {
+        token.sub = profile.sub as string;
       }
       return token;
     },
@@ -60,7 +60,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       if (session.user && token.sub) {
         try {
           await connectDB();
-          const dbUser = await User.findOne({ facebookId: token.sub });
+          const dbUser = await User.findOne({ googleId: token.sub });
           if (dbUser) {
             session.user.id = dbUser._id.toString();
           }
