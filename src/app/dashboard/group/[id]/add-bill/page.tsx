@@ -5,19 +5,20 @@ import { notFound, redirect } from "next/navigation";
 import AddBillForm from "@/components/AddBillForm";
 
 interface Member {
-  _id: unknown;
+  _id: any;
   name: string;
   image?: string;
 }
 
-export default async function AddBillPage({ params }: { params: { id: string } }) {
+export default async function AddBillPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const session = await auth();
   if (!session?.user?.id) redirect("/");
 
   await connectDB();
-  const group = await Group.findById(params.id)
+  const group = (await Group.findById(id)
     .populate("members", "name image")
-    .lean();
+    .lean()) as any;
 
   if (!group) notFound();
 
@@ -38,7 +39,7 @@ export default async function AddBillPage({ params }: { params: { id: string } }
 
   return (
     <AddBillForm 
-      groupId={params.id} 
+      groupId={id} 
       members={members} 
       currentUserId={session.user.id} 
     />

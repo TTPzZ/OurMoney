@@ -122,7 +122,7 @@ export default function AddBillForm({
             const newAmounts: Record<string, number> = {};
             members.forEach(m => newAmounts[m._id] = 0);
             
-            newOcrItems.forEach(item => {
+            newOcrItems.forEach((item: OCRItem) => {
               if (item.selectedMembers.length > 0) {
                 const splitPrice = item.price / item.selectedMembers.length;
                 item.selectedMembers.forEach((id: string) => {
@@ -168,7 +168,7 @@ export default function AddBillForm({
     const newAmounts: Record<string, number> = {};
     members.forEach(m => newAmounts[m._id] = 0);
     
-    newItems.forEach(i => {
+    newItems.forEach((i: OCRItem) => {
       if (i.selectedMembers.length > 0) {
         const splitPrice = i.price / i.selectedMembers.length;
         i.selectedMembers.forEach(id => {

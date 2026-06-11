@@ -52,7 +52,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
     async jwt({ token, account, profile }) {
       if (account && profile && account.provider === "facebook") {
-        token.sub = profile.id;
+        token.sub = profile.id as string;
       }
       return token;
     },

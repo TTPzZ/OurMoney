@@ -8,18 +8,18 @@ import Link from "next/link";
 import GroupInviteQR from "@/components/GroupInviteQR";
 import BillList from "@/components/BillList";
 import SettlementView from "@/components/SettlementView";
-import { calculateDebts } from "@/lib/utils/debt";
+import { simplifyDebts as calculateDebts } from "@/lib/utils/debt";
 
 interface Member {
-  _id: unknown;
+  _id: any;
   name: string;
   image?: string;
 }
 
 interface BillData {
-  paidBy: unknown;
+  paidBy: any;
   totalAmount: number;
-  splits: { userId: unknown; amount: number }[];
+  splits: { userId: any; amount: number }[];
 }
 
 interface BillListItem {
@@ -38,18 +38,20 @@ export default async function GroupPage({
   params, 
   searchParams 
 }: { 
-  params: { id: string };
-  searchParams: { tab?: string };
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ tab?: string }>;
 }) {
+  const { id } = await params;
+  const { tab } = await searchParams;
   const session = await auth();
   if (!session?.user?.id) redirect("/");
 
-  const activeTab = searchParams.tab || "bills";
+  const activeTab = tab || "bills";
 
   await connectDB();
-  const group = await Group.findById(params.id)
+  const group = (await Group.findById(id)
     .populate("members", "name image")
-    .lean();
+    .lean()) as any;
 
   if (!group) notFound();
 
@@ -63,10 +65,10 @@ export default async function GroupPage({
   if (!isMember) redirect("/dashboard");
 
   // Fetch bills
-  const bills = await Bill.find({ groupId: params.id })
+  const bills = (await Bill.find({ groupId: id })
     .populate("paidBy", "name image")
     .sort({ createdAt: -1 })
-    .lean();
+    .lean()) as any[];
 
   const members = groupMembers.map(m => ({
     _id: m._id.toString(),
@@ -170,7 +172,7 @@ export default async function GroupPage({
           <section className="space-y-4">
             <div className="flex items-center justify-between px-1">
               <h3 className="text-sm font-bold text-gray-400 uppercase tracking-wider">Recent Activity</h3>
-              <Link href={`/dashboard/group/${params.id}/add-bill`} className="text-xs font-bold text-indigo-600">
+              <Link href={`/dashboard/group/${id}/add-bill`} className="text-xs font-bold text-indigo-600">
                 + Add Bill
               </Link>
             </div>
@@ -181,7 +183,7 @@ export default async function GroupPage({
               <div className="bg-white rounded-3xl border border-dashed border-gray-300 p-12 text-center space-y-4">
                 <p className="text-gray-500 text-sm">No bills added yet.</p>
                 <Link 
-                  href={`/dashboard/group/${params.id}/add-bill`}
+                  href={`/dashboard/group/${id}/add-bill`}
                   className="inline-flex items-center gap-2 bg-indigo-600 text-white px-8 py-4 rounded-2xl font-bold shadow-lg active:scale-95 transition-transform"
                 >
                   <Plus size={20} />
@@ -212,7 +214,7 @@ export default async function GroupPage({
 
       {/* Floating Action Button for Adding Bill */}
       <Link 
-        href={`/dashboard/group/${params.id}/add-bill`}
+        href={`/dashboard/group/${id}/add-bill`}
         className="fixed bottom-8 right-6 w-16 h-16 bg-indigo-600 rounded-full flex items-center justify-center text-white shadow-2xl active:scale-90 transition-transform z-30 border-4 border-white"
       >
         <Plus size={32} />

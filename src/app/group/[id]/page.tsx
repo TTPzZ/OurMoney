@@ -13,7 +13,7 @@ interface IMember {
   image?: string;
 }
 
-interface IBillWithPayer extends Bill {
+interface IBillWithPayer extends Omit<Bill, 'paidBy'> {
   _id: string;
   description: string;
   createdAt: string;
@@ -32,7 +32,13 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
 
   const bills = await getBillsByGroupId(id) as IBillWithPayer[];
   const memberIds = group.members.map((m: IMember) => m._id);
-  const transactions = simplifyDebts(bills, memberIds);
+  const transactions = simplifyDebts(
+    bills.map(b => ({
+      ...b,
+      paidBy: typeof b.paidBy === 'string' ? b.paidBy : b.paidBy._id
+    })), 
+    memberIds
+  );
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32">

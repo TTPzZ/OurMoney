@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { joinGroup } from "@/lib/actions/group";
+import { joinGroupByCode as joinGroup } from "@/lib/actions/group";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
 
@@ -16,7 +16,7 @@ export default function JoinGroupButton({ inviteCode }: { inviteCode: string }) 
 
     try {
       const result = await joinGroup(inviteCode);
-      router.push(`/dashboard/group/${result.id}`);
+      router.push(`/dashboard/group/${result.groupId}`);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Failed to join group";
       setError(errorMessage);
