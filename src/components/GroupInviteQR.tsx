@@ -46,19 +46,17 @@ export default function GroupInviteQR({ inviteCode, groupName }: { inviteCode: s
         <p className="text-xs text-gray-400 font-medium uppercase tracking-wider">Quét mã QR để vào nhóm</p>
       </div>
 
-      <div className="bg-white p-4 rounded-2xl border-4 border-indigo-50 shadow-inner">
+      <div className="bg-white p-4 rounded-2xl border-4 border-indigo-50 shadow-inner flex flex-col items-center">
         <QRCodeSVG 
           value={inviteUrl} 
           size={160} 
           level="H"
           includeMargin={false}
-          imageSettings={{
-            src: "/logo.png", // Placeholder, will just be a blank center if not exists
-            height: 24,
-            width: 24,
-            excavate: true,
-          }}
         />
+        <div className="mt-4 pt-3 border-t border-indigo-50 w-full text-center">
+          <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Mã tham gia</p>
+          <p className="text-xl font-black text-indigo-600 tracking-wider mt-1">{inviteCode}</p>
+        </div>
       </div>
 
       <div className="flex gap-3 w-full">

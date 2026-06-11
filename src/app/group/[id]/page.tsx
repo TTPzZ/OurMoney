@@ -1,13 +1,14 @@
-import { getGroupById, deleteGroup } from "@/lib/actions/group";
+import { getGroupById, deleteGroup, leaveGroup } from "@/lib/actions/group";
 import { getBillsByGroupId } from "@/lib/actions/bill";
-import { getSettlementsByGroupId, markAsPaid, confirmReceived } from "@/lib/actions/settlement";
+import { getSettlementsByGroupId, markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
 import { simplifyDebts, type Bill } from "@/lib/utils/debt";
 import GroupInviteQR from "@/components/GroupInviteQR";
 import Link from "next/link";
-import { ChevronLeft, Plus, Receipt, ArrowRight, Landmark, Trash2, CheckCircle2, Clock, LogOut, User } from "lucide-react";
+import { ChevronLeft, Plus, Receipt, ArrowRight, Landmark, Trash2, CheckCircle2, Clock, LogOut, User as UserIcon } from "lucide-react";
 import Image from "next/image";
 import { notFound, redirect } from "next/navigation";
-import { auth, signOut } from "@/auth";
+import { auth } from "@/auth";
+import ActionButton from "@/components/ActionButton";
 
 interface IMember {
   _id: string;
@@ -43,6 +44,8 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
 
   const group = await getGroupById(id);
   if (!group) notFound();
+
+  const isCreator = group.createdBy === session.user.id;
 
   const bills = await getBillsByGroupId(id) as IBillWithPayer[];
   const settlements = await getSettlementsByGroupId(id) as ISettlement[];
@@ -86,15 +89,33 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <form action={async () => {
-            "use server";
-            await deleteGroup(id);
-            redirect("/dashboard");
-          }}>
-            <button className="p-2 bg-red-50 text-red-500 rounded-xl border border-red-100 active:scale-95 transition-transform">
+          {isCreator ? (
+            <ActionButton 
+              action={async () => {
+                "use server";
+                await deleteGroup(id);
+                redirect("/dashboard");
+              }}
+              variant="danger"
+              className="p-2 w-auto h-auto rounded-xl"
+              loadingText=""
+            >
               <Trash2 size={20} />
-            </button>
-          </form>
+            </ActionButton>
+          ) : (
+            <ActionButton 
+              action={async () => {
+                "use server";
+                await leaveGroup(id);
+                redirect("/dashboard");
+              }}
+              variant="danger"
+              className="p-2 w-auto h-auto rounded-xl"
+              loadingText=""
+            >
+              <LogOut size={20} />
+            </ActionButton>
+          )}
           <div className="flex -space-x-2">
             {group.members.slice(0, 3).map((member: IMember) => (
               <div key={member._id} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-gray-200">
@@ -170,14 +191,15 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
                         Đang chờ...
                       </div>
                     ) : (
-                      <form action={async () => {
-                        "use server";
-                        await markAsPaid(id, t.to, t.amount);
-                      }}>
-                        <button className="bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md active:scale-95 transition-transform">
-                          Đã trả
-                        </button>
-                      </form>
+                      <ActionButton 
+                        action={async () => {
+                          "use server";
+                          await markAsPaid(id, t.to, t.amount);
+                        }}
+                        className="px-4 py-2 text-xs"
+                      >
+                        Đã trả
+                      </ActionButton>
                     )}
                   </div>
                 );
@@ -204,22 +226,35 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
                         <p className="text-xs font-bold text-green-500">+₫{t.amount.toLocaleString()}</p>
                       </div>
                     </div>
-                    {pending ? (
-                      <form action={async () => {
-                        "use server";
-                        await confirmReceived(id, pending._id);
-                      }}>
-                        <button className="flex items-center gap-1 bg-green-500 text-white px-4 py-2 rounded-xl text-xs font-bold shadow-md active:scale-95 transition-transform">
-                          <CheckCircle2 size={12} />
-                          Xác nhận
-                        </button>
-                        <p className="text-[8px] text-amber-500 font-bold mt-1 text-center">Đã trả: {new Date(pending.paidAt!).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
-                      </form>
-                    ) : (
-                      <div className="text-[10px] font-bold text-gray-400 bg-gray-50 px-3 py-2 rounded-xl border border-gray-100">
-                        Chưa trả
-                      </div>
-                    )}
+                    <div className="flex flex-col items-end gap-1">
+                      {pending ? (
+                        <>
+                          <ActionButton 
+                            action={async () => {
+                              "use server";
+                              await confirmReceived(id, pending._id);
+                            }}
+                            variant="success"
+                            className="px-4 py-2 text-xs"
+                          >
+                            <CheckCircle2 size={12} />
+                            Xác nhận
+                          </ActionButton>
+                          <p className="text-[8px] text-amber-500 font-bold">Đã trả: {new Date(pending.paidAt!).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</p>
+                        </>
+                      ) : (
+                        <ActionButton 
+                          action={async () => {
+                            "use server";
+                            await directConfirm(id, t.from, t.amount);
+                          }}
+                          variant="secondary"
+                          className="px-4 py-2 text-xs"
+                        >
+                          Đã nhận tiền
+                        </ActionButton>
+                      )}
+                    </div>
                   </div>
                 );
               })}

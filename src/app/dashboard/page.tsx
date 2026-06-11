@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { getGroups } from "@/lib/actions/group";
 import CreateGroupModal from "@/components/CreateGroupModal";
+import JoinGroupForm from "@/components/JoinGroupForm";
 import Link from "next/link";
 import { Users, ChevronRight, PlusCircle } from "lucide-react";
 import Image from "next/image";
@@ -39,6 +40,12 @@ export default async function DashboardPage() {
           )}
           <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></div>
         </Link>
+      </div>
+
+      {/* Join Group Section */}
+      <div className="w-full max-w-md mb-8">
+        <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 mb-3">Tham gia bằng mã</h2>
+        <JoinGroupForm />
       </div>
 
       {/* Group List */}

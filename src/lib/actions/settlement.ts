@@ -37,6 +37,26 @@ export async function confirmReceived(groupId: string, settlementId: string) {
   revalidatePath(`/group/${groupId}`);
 }
 
+export async function directConfirm(groupId: string, from: string, amount: number) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  await connectDB();
+
+  // Create a completed settlement directly
+  await Settlement.create({
+    groupId,
+    from,
+    to: session.user.id,
+    amount,
+    status: 'completed',
+    paidAt: new Date(),
+    completedAt: new Date()
+  });
+
+  revalidatePath(`/group/${groupId}`);
+}
+
 export async function getSettlementsByGroupId(groupId: string) {
   await connectDB();
   const settlements = await Settlement.find({ groupId })
