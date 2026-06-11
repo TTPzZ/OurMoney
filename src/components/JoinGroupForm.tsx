@@ -6,7 +6,11 @@ import { useRouter } from "next/navigation";
 import { UserPlus, Loader2 } from "lucide-react";
 import { useSWRConfig } from "swr";
 
-export default function JoinGroupForm() {
+export default function JoinGroupForm({
+  onOpenGroup,
+}: {
+  onOpenGroup?: (groupId: string) => void;
+}) {
   const [code, setCode] = useState("");
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -20,10 +24,15 @@ export default function JoinGroupForm() {
         const result = await joinGroupByCode(code.trim());
         if (result.success) {
           mutate("/api/groups");
-          router.push(`/group/${result.groupId}`);
+          if (onOpenGroup) {
+            onOpenGroup(result.groupId);
+          } else {
+            router.push(`/group/${result.groupId}`);
+          }
         }
-      } catch (error: any) {
-        alert(error.message || "Không thể tham gia nhóm");
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Không thể tham gia nhóm";
+        alert(message);
       }
     });
   };

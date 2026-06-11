@@ -6,7 +6,11 @@ import { createGroup } from "@/lib/actions/group";
 import { useRouter } from "next/navigation";
 import { useSWRConfig } from "swr";
 
-export default function CreateGroupModal() {
+export default function CreateGroupModal({
+  onOpenGroup,
+}: {
+  onOpenGroup?: (groupId: string) => void;
+}) {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [isPending, setIsPending] = useState(false);
@@ -24,7 +28,11 @@ export default function CreateGroupModal() {
         mutate("/api/groups");
         setIsOpen(false);
         setName("");
-        router.push(`/group/${result.groupId}`);
+        if (onOpenGroup) {
+          onOpenGroup(result.groupId);
+        } else {
+          router.push(`/group/${result.groupId}`);
+        }
       }
     } catch (error) {
       console.error("Failed to create group:", error);

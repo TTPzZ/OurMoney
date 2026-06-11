@@ -1,311 +1,130 @@
-# Nhiệm vụ: Tối ưu UX điều hướng bằng cache + background revalidation cho OurMoney
+# Nhiệm vụ: Sửa cache flow để click Group hiển thị dữ liệu đã preload ngay lập tức
 
-## Bối cảnh dự án
+## Bối cảnh
 
-Dự án: **OurMoney**
-Stack hiện tại:
+Project OurMoney đang dùng:
 
 * Next.js App Router
-* NextAuth / Google Login
-* MongoDB + Mongoose
-* Deploy trên Vercel
+* NextAuth
+* MongoDB/Mongoose
+* SWR hoặc cơ chế cache tương tự
+* Deploy Vercel
 
-Hiện trạng:
+Phase trước đã cố làm cache + background revalidation, nhưng UX vẫn chưa đúng mục tiêu.
 
-* Sau khi tối ưu region/cold start, lần đầu mở group đã đỡ chậm hơn.
-* Tuy nhiên khi người dùng chuyển giữa Dashboard và Group, UI vẫn có cảm giác chậm.
-* DevTools cho thấy một số request RSC như:
+Hiện tượng hiện tại:
+
+* Sau khi login/dashboard load xong, click vào group vẫn phải chờ route `/group/[id]?_rsc=...`.
+* Network vẫn cho thấy request RSC của `/group/[id]` mất khoảng 1.3s.
+* Điều này chứng tỏ app vẫn đang chờ server navigation trước khi Group UI được mount.
+* Cache có thể đã tồn tại, nhưng nó chỉ được dùng sau khi route group đã load xong, nên người dùng vẫn phải chờ.
+
+## Mục tiêu thật sự
+
+Sau khi user đăng nhập:
 
 ```txt
-/group/[id]?_rsc=...
-/dashboard?_rsc=...
+Dashboard load
+→ app âm thầm preload dữ liệu group
+→ user click group
+→ hiển thị dữ liệu group từ cache ngay lập tức
+→ sau đó mới background fetch dữ liệu mới nhất
+→ nếu có thay đổi thì update UI
 ```
 
-có thông số khoảng:
+Không được để click group phải chờ `/group/[id]?_rsc=...` xong mới hiện UI.
 
-```txt
-Waiting for server response: 300–400ms
-Content Download: ~900ms
-Size: khoảng 1.6KB ở các lần sau
-```
+## Yêu cầu quan trọng
 
-Vì payload rất nhỏ nhưng vẫn cảm giác chờ, vấn đề chính không còn là payload lớn, mà là app vẫn phụ thuộc quá nhiều vào server navigation/RSC request cho mỗi lần chuyển màn hình.
+1. Không dùng realtime/websocket.
+2. Không rewrite toàn bộ app nếu không cần.
+3. Ưu tiên UX instant.
+4. Không làm hỏng auth, group, bill, settlement.
+5. Không prefetch toàn bộ nếu user có quá nhiều group.
+6. Không bắt user reload trang.
+7. Không bắt user bấm ra ngoài rồi vào lại để thấy dữ liệu mới.
 
 ---
 
-# Mục tiêu
+# Hướng sửa bắt buộc
 
-Triển khai cơ chế:
+## 1. Tạo Client Shell sau login
 
-```txt
-Cache data → hiển thị ngay → fetch lại ở background → nếu có dữ liệu mới thì tự cập nhật UI
-```
-
-Không dùng realtime/websocket ở giai đoạn này.
-
-Mục tiêu UX:
-
-* Sau login, dashboard load xong thì âm thầm prefetch một số group.
-* Khi user click vào group, nếu có cache thì hiển thị gần như tức thì.
-* Sau khi vào group, app tự fetch dữ liệu mới ở background.
-* Nếu dữ liệu mới khác cache thì cập nhật UI luôn.
-* Không bắt user reload trang.
-* Không bắt user bấm ra ngoài rồi vào lại để thấy dữ liệu mới.
-* Không rewrite toàn bộ app.
-
----
-
-# Yêu cầu kỹ thuật
-
-Ưu tiên dùng **SWR** vì nhẹ và dễ tích hợp.
-
-Nếu project đã có TanStack Query thì dùng TanStack Query cũng được, nhưng không tự ý thêm cả hai thư viện cùng lúc.
-
-Nếu chưa có SWR thì cài:
-
-```bash
-npm install swr
-```
-
----
-
-# Phạm vi cần làm
-
-## 1. Tạo API endpoint cho Dashboard group list
-
-Tạo hoặc kiểm tra endpoint:
+Tạo một client component kiểu:
 
 ```txt
-GET /api/groups
+MoneyClientShell
 ```
 
-Endpoint này trả về danh sách group của user hiện tại.
+Shell này chịu trách nhiệm:
 
-Yêu cầu:
+* giữ current view hiện tại
+* giữ selectedGroupId
+* render DashboardView hoặc GroupDetailView
+* dùng SWR cache chung
 
-* Verify auth bằng NextAuth.
-* Nếu chưa đăng nhập thì trả 401.
-* Chỉ trả group mà user là member.
-* Chỉ select field cần thiết.
-* Không trả dữ liệu thừa.
-
-Dữ liệu gợi ý:
-
-```ts
-{
-  groups: [
-    {
-      _id: string,
-      name: string,
-      membersCount: number,
-      updatedAt?: string,
-      createdAt?: string
-    }
-  ],
-  version?: string
-}
-```
-
-Không trả về:
-
-* googleId
-* email của member nếu không cần
-* __v
-* token/secret
-* object user đầy đủ
-
----
-
-## 2. Tạo API endpoint cho Group detail
-
-Tạo hoặc kiểm tra endpoint:
+Ví dụ structure:
 
 ```txt
-GET /api/groups/[id]
+MoneyClientShell
+├── DashboardView
+├── GroupDetailView
+└── AddBillModal hoặc AddBillView
 ```
 
-Endpoint này trả dữ liệu cần cho trang group detail.
+Server page như `/dashboard/page.tsx` chỉ nên:
 
-Yêu cầu:
+* check auth
+* fetch initial groups nếu cần
+* render `MoneyClientShell` với initial data
 
-* Verify auth.
-* Check user hiện tại có thuộc group không.
-* Nếu không có quyền thì trả 403 hoặc 404.
-* Chỉ select field cần cho UI.
-* Không populate User đầy đủ.
-* Có `.lean()` cho query Mongoose.
+## 2. Dashboard không được mở group bằng server navigation nếu muốn instant
 
-Dữ liệu trả về gợi ý:
-
-```ts
-{
-  group: {
-    _id: string,
-    name: string,
-    members: [
-      {
-        _id: string,
-        name: string,
-        image?: string
-      }
-    ],
-    createdAt?: string,
-    updatedAt?: string
-  },
-  bills: [
-    {
-      _id: string,
-      title: string,
-      amount: number,
-      paidBy: {
-        _id: string,
-        name: string,
-        image?: string
-      },
-      splitBetween: ...,
-      createdAt: string,
-      updatedAt?: string
-    }
-  ],
-  settlements: [
-    {
-      _id: string,
-      from: {
-        _id: string,
-        name: string,
-        image?: string
-      },
-      to: {
-        _id: string,
-        name: string,
-        image?: string
-      },
-      amount: number,
-      status: string,
-      createdAt: string,
-      updatedAt?: string
-    }
-  ],
-  summary?: ...,
-  version: string
-}
-```
-
-`version` có thể là timestamp mới nhất từ group/bills/settlements, ví dụ max `updatedAt`.
-
-Mục đích của `version`:
-
-* Dễ biết dữ liệu đã thay đổi chưa.
-* Giúp debug/cache sau này.
-
----
-
-## 3. Tạo fetcher dùng chung
-
-Tạo file, ví dụ:
-
-```txt
-src/lib/fetcher.ts
-```
-
-Nội dung:
-
-```ts
-export async function fetcher<T = unknown>(url: string): Promise<T> {
-  const res = await fetch(url, {
-    credentials: "include",
-  });
-
-  if (!res.ok) {
-    const message = await res.text().catch(() => "");
-    throw new Error(message || `Failed to fetch ${url}`);
-  }
-
-  return res.json();
-}
-```
-
----
-
-## 4. Tạo SWR Provider
-
-Nếu app đã có file providers thì thêm vào đó.
-
-Ví dụ:
+Tìm các chỗ đang dùng:
 
 ```tsx
-"use client";
-
-import { SWRConfig } from "swr";
-
-export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <SWRConfig
-      value={{
-        revalidateOnFocus: true,
-        revalidateIfStale: true,
-        dedupingInterval: 5000,
-        keepPreviousData: true,
-        shouldRetryOnError: false,
-      }}
-    >
-      {children}
-    </SWRConfig>
-  );
-}
+<Link href={`/group/${group._id}`}>
 ```
 
-Nếu đã có provider khác như ThemeProvider/SessionProvider thì bọc SWRConfig vào cùng, không phá cấu trúc hiện tại.
-
----
-
-## 5. Sửa Dashboard để dùng cache
-
-Dashboard hiện tại có thể vẫn là server page.
-
-Yêu cầu:
-
-* Server page vẫn được phép check auth.
-* Có thể fetch initial groups từ server.
-* Truyền `initialGroupsData` xuống client component.
-* Client component dùng SWR với `fallbackData`.
-
-Ví dụ logic:
+hoặc:
 
 ```tsx
-const { data, isLoading, isValidating, mutate } = useSWR(
-  "/api/groups",
-  fetcher,
-  {
-    fallbackData: initialGroupsData,
-    revalidateOnMount: true,
-    revalidateOnFocus: true,
-  }
-);
+router.push(`/group/${group._id}`)
 ```
 
-Khi quay lại dashboard:
+cho hành động click group.
 
-* Hiển thị cache ngay.
-* Background fetch lại.
-* Nếu có group mới/thay đổi thì UI cập nhật.
-
----
-
-## 6. Prefetch group detail sau khi login/dashboard load xong
-
-Trong Dashboard client component:
-
-* Sau khi có danh sách groups, prefetch tối đa 3–5 group gần nhất.
-* Không prefetch toàn bộ nếu user có nhiều group.
-* Tránh spam request.
-
-Ví dụ:
+Với flow instant cache, đổi thành client action:
 
 ```tsx
-import { useSWRConfig } from "swr";
-import { fetcher } from "@/lib/fetcher";
+onClick={() => openGroup(group._id)}
+```
 
+Trong `openGroup(groupId)`:
+
+```tsx
+setSelectedGroupId(groupId);
+setView("group");
+
+// Optional: chỉ đổi URL cho đẹp, không trigger Next.js navigation
+window.history.pushState(null, "", `/group/${groupId}`);
+```
+
+Không dùng `router.push()` cho bước mở group cache, vì `router.push()` sẽ trigger route navigation và RSC request.
+
+## 3. Preload data sau khi dashboard có group list
+
+Sau khi load danh sách group, preload data cho một số group:
+
+* 3–5 group gần nhất
+* hoặc group hiện trong viewport
+* hoặc group user hover
+
+Không prefetch tất cả nếu quá nhiều.
+
+Ví dụ với SWR:
+
+```tsx
 const { mutate } = useSWRConfig();
 
 useEffect(() => {
@@ -315,239 +134,208 @@ useEffect(() => {
     const key = `/api/groups/${group._id}`;
 
     mutate(key, fetcher(key), {
-      revalidate: false,
       populateCache: true,
+      revalidate: false,
     });
   });
 }, [groups, mutate]);
 ```
 
-Nếu thấy cách này gây request ngay quá nhiều, chuyển sang prefetch khi hover group card:
+Có thể thêm hover prefetch:
 
 ```tsx
 onMouseEnter={() => {
   const key = `/api/groups/${group._id}`;
 
   mutate(key, fetcher(key), {
-    revalidate: false,
     populateCache: true,
+    revalidate: false,
   });
 }}
 ```
 
-Có thể kết hợp:
+## 4. GroupDetailView phải render từ SWR cache ngay
 
-* Auto prefetch 3 group mới nhất.
-* Hover thì prefetch group đó.
+`GroupDetailView` nhận `groupId`.
 
----
+Nó dùng SWR:
 
-## 7. Sửa Group Detail để dùng cache + background revalidation
+```tsx
+const key = `/api/groups/${groupId}`;
 
-Trang `/group/[id]`:
+const { data, isLoading, isValidating, mutate } = useSWR(key, fetcher, {
+  revalidateOnMount: true,
+  revalidateOnFocus: true,
+  dedupingInterval: 5000,
+  keepPreviousData: true,
+});
+```
 
-* Server page vẫn check auth.
-* Có thể fetch initial group data.
-* Truyền `initialData` xuống `GroupClient`.
-* `GroupClient` dùng SWR.
+Yêu cầu:
+
+* Nếu SWR cache đã có data, render ngay.
+* Không hiện full loading nếu cache đã có data.
+* Nếu đang background fetch thì chỉ hiện indicator nhỏ như “Đang cập nhật...”.
+* Nếu chưa có cache thì mới hiện skeleton/loading.
+
+Pseudo:
+
+```tsx
+if (!data && isLoading) {
+  return <GroupSkeleton />;
+}
+
+return (
+  <>
+    {isValidating && <SmallUpdatingIndicator />}
+    <GroupContent data={data} />
+  </>
+);
+```
+
+## 5. Background fetch và auto update
+
+Khi user mở group:
+
+* UI render cache ngay.
+* SWR tự fetch lại.
+* Nếu server trả data mới, UI update tự động.
+* Không yêu cầu user reload.
+
+Có thể dùng field `version` từ API để debug data có đổi không.
+
+## 6. API cần có
+
+Đảm bảo có:
+
+```txt
+GET /api/groups
+GET /api/groups/[id]
+```
+
+Yêu cầu:
+
+* Verify auth.
+* Check quyền truy cập group.
+* Chỉ select field cần thiết.
+* Không trả field nhạy cảm như googleId, email nếu không cần, __v, token.
+* Dữ liệu phải đủ để render GroupDetailView.
+
+## 7. Back về Dashboard cũng không nên dùng server navigation
+
+Khi đang ở GroupDetailView, nút Back nên làm:
+
+```tsx
+setView("dashboard");
+setSelectedGroupId(null);
+window.history.pushState(null, "", "/dashboard");
+```
+
+Không dùng `router.push("/dashboard")` nếu muốn dashboard hiện cache ngay.
+
+## 8. Xử lý browser Back/Forward
+
+Vì dùng `window.history.pushState`, cần nghe `popstate` để đồng bộ view khi user bấm nút Back của trình duyệt.
 
 Ví dụ:
 
 ```tsx
-const { data, error, isLoading, isValidating, mutate } = useSWR(
-  `/api/groups/${groupId}`,
-  fetcher,
-  {
-    fallbackData: initialData,
-    revalidateOnMount: true,
-    revalidateOnFocus: true,
-    dedupingInterval: 5000,
-  }
-);
+useEffect(() => {
+  const handlePopState = () => {
+    const path = window.location.pathname;
+
+    if (path.startsWith("/group/")) {
+      const groupId = path.split("/")[2];
+      setSelectedGroupId(groupId);
+      setView("group");
+    } else {
+      setSelectedGroupId(null);
+      setView("dashboard");
+    }
+  };
+
+  window.addEventListener("popstate", handlePopState);
+
+  return () => {
+    window.removeEventListener("popstate", handlePopState);
+  };
+}, []);
 ```
 
-Yêu cầu:
+## 9. Sau mutation phải cập nhật cache
 
-* Nếu có `fallbackData`, render ngay.
-* Khi SWR fetch xong dữ liệu mới, UI tự cập nhật.
-* Nếu đang background fetch thì có thể hiện text/icon nhỏ:
+Sau khi:
 
-```txt
-Đang cập nhật...
-```
-
-Không làm loading full screen nếu đã có dữ liệu cache.
-
----
-
-## 8. Không bắt user reload để thấy dữ liệu mới
-
-Nếu background fetch trả dữ liệu mới:
-
-* Cập nhật UI luôn.
-* Không yêu cầu user reload trang.
-* Không yêu cầu user thoát group rồi vào lại.
-
-Nếu cần tránh UI nhảy bất ngờ, có thể hiện toast nhỏ:
-
-```txt
-Dữ liệu đã được cập nhật
-```
-
-Nhưng không bắt buộc.
-
----
-
-## 9. Sau mutation phải cập nhật cache đúng key
-
-Kiểm tra các action:
-
-* create group
-* join group
-* update group
-* delete group
 * create bill
 * update bill
 * delete bill
+* join group
 * create settlement
 * update settlement
 
-Sau khi mutation thành công:
-
-* Update hoặc invalidate đúng SWR key.
-* Hạn chế dùng `router.refresh()` nếu không cần.
-* Không `revalidatePath()` quá rộng.
-
-Ví dụ sau khi tạo bill:
+Cần mutate đúng SWR key:
 
 ```tsx
-await createBill(payload);
-
 mutate(`/api/groups/${groupId}`);
 mutate("/api/groups");
 ```
 
-Nếu dễ làm optimistic UI thì có thể làm, nhưng không bắt buộc trong phase này.
+Nếu dễ, có thể optimistic update, nhưng không bắt buộc trong phase này.
 
-Phase này ưu tiên:
+Không dùng `router.refresh()` nếu không cần.
 
-* submit thành công
-* cache refresh đúng
-* UI cập nhật nhanh
+## 10. Giữ route `/group/[id]` cho deep link
 
----
+Vẫn nên giữ `/group/[id]/page.tsx` để user mở trực tiếp link group vẫn hoạt động.
 
-## 10. Kiểm tra và giảm refresh thừa
+Nhưng flow click từ dashboard nên ưu tiên client shell instant view.
 
-Search toàn bộ project:
+Nếu user reload trực tiếp `/group/[id]`:
 
-```bash
-grep -R "router.refresh" src
-grep -R "revalidatePath" src
-grep -R "window.location" src
-grep -R "location.href" src
-```
+* server page vẫn render bình thường.
+* không cần instant cache vì cache chưa có.
 
-Yêu cầu:
+## 11. Đo lại sau khi sửa
 
-* Không gọi `router.refresh()` trong `useEffect`.
-* Không refresh ngay sau khi navigation nếu không cần.
-* Không dùng `window.location.href` cho route nội bộ.
-* Route nội bộ phải dùng `Link` hoặc `router.push`.
-
----
-
-## 11. Loading UI
-
-Nếu route vẫn cần server navigation:
-
-* Thêm loading skeleton nhẹ.
-* Không hiện màn hình trắng.
-
-Có thể thêm:
-
-```txt
-src/app/dashboard/loading.tsx
-src/app/group/[id]/loading.tsx
-```
-
-Nhưng lưu ý:
-
-* Nếu đã có cache data trong client, ưu tiên render cache, không thay bằng full loading.
-
----
-
-## 12. Kiểm tra bảo mật
-
-Các API endpoint phải:
-
-* Check user đã login.
-* Check quyền truy cập group.
-* Không để user A đọc group của user B bằng cách đổi URL.
-* Không trả field nhạy cảm.
-
----
-
-## 13. Đo hiệu năng sau khi sửa
-
-Sau khi hoàn thành, chạy:
-
-```bash
-npm run lint
-npm run build
-```
-
-Sau đó deploy và test các flow:
+Test flow:
 
 1. Login.
 2. Vào dashboard.
-3. Đợi 1–2 giây để prefetch.
-4. Click vào group.
-5. Back về dashboard.
-6. Vào lại group.
-7. Tạo bill mới.
-8. Kiểm tra group cập nhật đúng.
-9. Focus tab lại sau vài giây để xem SWR có refresh không.
+3. Đợi 1–2 giây cho preload.
+4. Click group đã preload.
+5. UI phải hiện gần như ngay.
+6. Network có thể gọi `/api/groups/[id]` background, nhưng UI không được đợi request này.
+7. Bấm back về dashboard.
+8. Dashboard phải hiện ngay từ cache.
+9. Tạo bill mới.
+10. Group cache cập nhật đúng.
 
-Ghi nhận:
-
-* UI có hiện ngay từ cache không.
-* Có còn full loading không.
-* Có request spam không.
-* Network `_rsc` có còn làm UX bị chờ không.
-* API `/api/groups/[id]` có chạy background hợp lý không.
-
----
-
-# Acceptance Criteria
+## Acceptance Criteria
 
 Hoàn thành khi:
 
+* Click group từ dashboard không còn phải chờ `/group/[id]?_rsc=...` mới hiện UI.
+* Group đã preload hiển thị từ cache gần như tức thì.
+* Sau khi mở group, app background fetch dữ liệu mới nhất.
+* Nếu có dữ liệu mới, UI tự cập nhật.
+* Back về dashboard hiện ngay.
+* Browser Back/Forward hoạt động đúng.
+* Direct URL `/group/[id]` vẫn hoạt động.
 * Login Google vẫn hoạt động.
-* Dashboard hiển thị group bình thường.
-* Dashboard dùng cache, quay lại không bị chờ rõ rệt.
-* Group detail nếu đã có cache thì hiển thị gần như tức thì.
-* Group detail tự background fetch dữ liệu mới.
-* Nếu dữ liệu mới khác cache thì UI cập nhật tự động.
-* Add bill xong dữ liệu group cập nhật đúng.
-* Không cần realtime/websocket.
-* Không cần reload trang để thấy dữ liệu mới.
+* Add bill, settlement, group list vẫn hoạt động.
 * Không spam request.
-* Không lộ dữ liệu user/group không thuộc quyền truy cập.
-* Build production thành công.
+* Không lộ dữ liệu group của user khác.
 
----
-
-# Báo cáo sau khi làm xong
+## Báo cáo sau khi hoàn thành
 
 Hãy báo lại:
 
-1. Đã sửa/thêm những file nào.
-2. Dùng SWR hay TanStack Query.
-3. Những SWR key/API key đang dùng.
-4. Cách dashboard prefetch group detail.
-5. Cách group detail background refresh.
-6. Cách cache được cập nhật sau khi tạo bill/group/settlement.
-7. Các chỗ đã loại bỏ `router.refresh()` hoặc `revalidatePath()` thừa.
-8. Kết quả test trước/sau.
+1. Đã thêm Client Shell ở đâu.
+2. Flow click group cũ và mới khác nhau thế nào.
+3. Các route nào vẫn dùng server navigation.
+4. Các route/view nào đã dùng client cache.
+5. SWR keys đang dùng.
+6. Cách preload group data sau dashboard.
+7. Cách xử lý browser Back/Forward.
+8. Kết quả đo Network trước/sau.
 9. Rủi ro còn lại nếu có.

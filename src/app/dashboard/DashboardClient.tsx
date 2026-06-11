@@ -9,22 +9,19 @@ import { Users, ChevronRight, PlusCircle } from "lucide-react";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import JoinGroupForm from "@/components/JoinGroupForm";
 import Avatar from "@/components/Avatar";
-
-interface IGroupListItem {
-  _id: string;
-  name: string;
-  members: string[];
-}
+import type { GroupListItem } from "@/lib/money-types";
 
 export default function DashboardClient({ 
   initialGroups,
-  user
+  user,
+  onOpenGroup,
 }: { 
-  initialGroups: IGroupListItem[],
-  user: { name?: string | null, image?: string | null }
+  initialGroups: GroupListItem[],
+  user: { name?: string | null, image?: string | null },
+  onOpenGroup: (groupId: string) => void,
 }) {
   const { cache, mutate } = useSWRConfig();
-  const { data } = useSWR<{ groups: IGroupListItem[] }>("/api/groups", fetcher, {
+  const { data } = useSWR<{ groups: GroupListItem[] }>("/api/groups", fetcher, {
     fallbackData: { groups: initialGroups },
     revalidateOnMount: true,
   });
@@ -57,6 +54,11 @@ export default function DashboardClient({
     }
   };
 
+  const handleOpenGroup = (groupId: string) => {
+    handlePrefetch(groupId);
+    onOpenGroup(groupId);
+  };
+
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center p-6 pb-24 w-full">
       {/* Header */}
@@ -76,7 +78,7 @@ export default function DashboardClient({
       {/* Join Group Section */}
       <div className="w-full max-w-md mb-8">
         <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 mb-3">Tham gia bằng mã</h2>
-        <JoinGroupForm />
+        <JoinGroupForm onOpenGroup={onOpenGroup} />
       </div>
 
       {/* Group List */}
@@ -86,11 +88,13 @@ export default function DashboardClient({
         {groups.length > 0 ? (
           <div className="space-y-3">
             {groups.map((group) => (
-              <Link
+              <button
+                type="button"
                 key={group._id}
-                href={`/group/${group._id}`}
                 onMouseEnter={() => handlePrefetch(group._id)}
-                className="flex items-center justify-between bg-white p-5 rounded-3xl border border-gray-100 shadow-sm active:scale-95 transition-all"
+                onFocus={() => handlePrefetch(group._id)}
+                onClick={() => handleOpenGroup(group._id)}
+                className="w-full text-left flex items-center justify-between bg-white p-5 rounded-3xl border border-gray-100 shadow-sm active:scale-95 transition-all"
               >
                 <div className="flex items-center gap-4">
                   <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
@@ -104,7 +108,7 @@ export default function DashboardClient({
                   </div>
                 </div>
                 <ChevronRight className="text-gray-300" size={20} />
-              </Link>
+              </button>
             ))}
           </div>
         ) : (
@@ -119,7 +123,7 @@ export default function DashboardClient({
 
       {/* Floating Action Button / Fixed Bottom */}
       <div className="fixed bottom-8 w-full max-w-md px-6 flex justify-center">
-        <CreateGroupModal />
+        <CreateGroupModal onOpenGroup={onOpenGroup} />
       </div>
     </main>
   );

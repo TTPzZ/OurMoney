@@ -16,7 +16,7 @@ export default function JoinGroupButton({ inviteCode }: { inviteCode: string }) 
 
     try {
       const result = await joinGroup(inviteCode);
-      router.push(`/dashboard/group/${result.groupId}`);
+      router.push(`/group/${result.groupId}`);
     } catch (err: unknown) {
       const errorMessage = err instanceof Error ? err.message : "Failed to join group";
       setError(errorMessage);

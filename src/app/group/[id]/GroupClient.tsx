@@ -1,55 +1,33 @@
 "use client";
 
 import useSWR from "swr";
+import { useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
-import { simplifyDebts, type Bill } from "@/lib/utils/debt";
+import { simplifyDebts } from "@/lib/utils/debt";
 import GroupInviteQR from "@/components/GroupInviteQR";
 import Link from "next/link";
-import { ChevronLeft, Plus, Receipt, ArrowRight, Landmark, Trash2, CheckCircle2, Clock, LogOut } from "lucide-react";
+import { ChevronLeft, Plus, Receipt, Landmark, Trash2, CheckCircle2, Clock, LogOut } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { useRouter } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
 import { deleteGroup, leaveGroup } from "@/lib/actions/group";
 import { markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
-
-interface IMember {
-  _id: string;
-  name: string;
-  image?: string;
-}
-
-interface IBillWithPayer extends Omit<Bill, 'paidBy'> {
-  _id: string;
-  description: string;
-  createdAt: string;
-  paidBy: {
-    _id: string;
-    name: string;
-    image?: string;
-  };
-}
-
-interface ISettlement {
-  _id: string;
-  from: IMember;
-  to: IMember;
-  amount: number;
-  status: 'pending' | 'completed';
-  paidAt?: string;
-  completedAt?: string;
-}
+import type { BillWithPayer, GroupDetailData, GroupMember, Settlement } from "@/lib/money-types";
 
 export default function GroupClient({ 
   groupId,
   userId,
-  initialData 
+  initialData,
+  onBackToDashboard,
 }: { 
   groupId: string,
   userId: string,
-  initialData: { group: any, bills: IBillWithPayer[], settlements: ISettlement[] }
+  initialData?: GroupDetailData,
+  onBackToDashboard?: () => void,
 }) {
   const router = useRouter();
-  const { data, mutate, isValidating } = useSWR<{ group: any, bills: IBillWithPayer[], settlements: ISettlement[] }>(
+  const { mutate: mutateGlobal } = useSWRConfig();
+  const { data, error, mutate, isLoading, isValidating } = useSWR<GroupDetailData>(
     `/api/groups/${groupId}`, 
     fetcher, 
     {
@@ -59,25 +37,66 @@ export default function GroupClient({
     }
   );
 
-  const { group, bills, settlements } = data || initialData;
+  const detail = data || initialData;
+
+  const goDashboard = () => {
+    if (onBackToDashboard) {
+      onBackToDashboard();
+    } else {
+      router.push("/dashboard");
+    }
+  };
+
+  if (!detail && isLoading) {
+    return (
+      <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32 w-full">
+        <div className="w-full max-w-md flex items-center gap-3 mb-6 pt-4">
+          <BackToDashboard onBackToDashboard={onBackToDashboard} />
+          <div className="space-y-2">
+            <div className="h-5 w-32 rounded-lg bg-gray-200 animate-pulse" />
+            <div className="h-3 w-20 rounded-lg bg-gray-100 animate-pulse" />
+          </div>
+        </div>
+        <div className="w-full max-w-md space-y-4">
+          <div className="h-24 rounded-3xl bg-white border border-gray-100 shadow-sm animate-pulse" />
+          <div className="h-40 rounded-3xl bg-white border border-gray-100 shadow-sm animate-pulse" />
+          <div className="h-32 rounded-3xl bg-white border border-gray-100 shadow-sm animate-pulse" />
+        </div>
+      </main>
+    );
+  }
+
+  if (!detail) {
+    const message = error instanceof Error ? error.message : "Khong the tai du lieu nhom";
+    return (
+      <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32 w-full">
+        <div className="w-full max-w-md flex items-center gap-3 mb-6 pt-4">
+          <BackToDashboard onBackToDashboard={onBackToDashboard} />
+          <p className="text-sm font-bold text-red-500">{message}</p>
+        </div>
+      </main>
+    );
+  }
+
+  const { group, bills, settlements } = detail;
   
   if (!group) return null;
 
-  const isCreator = group.createdBy === userId;
+  const isCreator = group.createdBy.toString() === userId;
 
   const completedSettlements = settlements
-    .filter((s: ISettlement) => s.status === 'completed')
-    .map((s: ISettlement) => ({
+    .filter((s: Settlement) => s.status === 'completed')
+    .map((s: Settlement) => ({
       from: s.from._id,
       to: s.to._id,
       amount: s.amount
     }));
 
-  const memberIds = group.members.map((m: IMember) => m._id);
+  const memberIds = group.members.map((m: GroupMember) => m._id);
   const transactions = simplifyDebts(
-    bills.map((b: IBillWithPayer) => ({
+    bills.map((b: BillWithPayer) => ({
       ...b,
-      paidBy: typeof b.paidBy === 'string' ? b.paidBy : b.paidBy._id
+      paidBy: b.paidBy._id
     })), 
     memberIds,
     completedSettlements
@@ -86,16 +105,14 @@ export default function GroupClient({
   // Filter transactions involving the current user
   const userOwes = transactions.filter(t => t.from === userId);
   const owedToUser = transactions.filter(t => t.to === userId);
-  const pendingSettlements = settlements.filter((s: ISettlement) => s.status === 'pending');
+  const pendingSettlements = settlements.filter((s: Settlement) => s.status === 'pending');
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32 w-full">
       {/* Header */}
       <div className="w-full max-w-md flex justify-between items-center mb-6 pt-4">
         <div className="flex items-center gap-3">
-          <Link href="/dashboard" className="p-2 bg-white rounded-xl shadow-sm border border-gray-100 text-gray-500">
-            <ChevronLeft size={24} />
-          </Link>
+          <BackToDashboard onBackToDashboard={onBackToDashboard} />
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-xl font-bold text-gray-900 truncate max-w-[150px] leading-tight">{group.name}</h1>
@@ -111,7 +128,9 @@ export default function GroupClient({
             <ActionButton 
               action={async () => {
                 await deleteGroup(groupId);
-                router.push("/dashboard");
+                mutateGlobal(`/api/groups/${groupId}`, undefined, { revalidate: false });
+                await mutateGlobal("/api/groups");
+                goDashboard();
               }}
               variant="danger"
               className="p-2 w-auto h-auto rounded-xl"
@@ -123,7 +142,9 @@ export default function GroupClient({
             <ActionButton 
               action={async () => {
                 await leaveGroup(groupId);
-                router.push("/dashboard");
+                mutateGlobal(`/api/groups/${groupId}`, undefined, { revalidate: false });
+                await mutateGlobal("/api/groups");
+                goDashboard();
               }}
               variant="danger"
               className="p-2 w-auto h-auto rounded-xl"
@@ -133,7 +154,7 @@ export default function GroupClient({
             </ActionButton>
           )}
           <div className="flex -space-x-2">
-            {group.members.slice(0, 3).map((member: IMember) => (
+            {group.members.slice(0, 3).map((member: GroupMember) => (
               <div key={member._id} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-gray-200">
                 <Avatar src={member.image} name={member.name} size={32} />
               </div>
@@ -175,8 +196,8 @@ export default function GroupClient({
             <div className="space-y-3">
               {/* Debt Details */}
               {userOwes.map((t, idx) => {
-                const toMember = group.members.find((m: IMember) => m._id === t.to);
-                const isPending = pendingSettlements.some((s: ISettlement) => s.from._id === userId && s.to._id === t.to);
+                const toMember = group.members.find((m: GroupMember) => m._id === t.to);
+                const isPending = pendingSettlements.some((s: Settlement) => s.from._id === userId && s.to._id === t.to);
                 
                 return (
                   <div key={`owe-${idx}`} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
@@ -198,7 +219,7 @@ export default function GroupClient({
                       <ActionButton 
                         action={async () => {
                           await markAsPaid(groupId, t.to, t.amount);
-                          mutate();
+                          await mutate();
                         }}
                         className="px-4 py-2 text-xs"
                       >
@@ -210,8 +231,8 @@ export default function GroupClient({
               })}
 
               {owedToUser.map((t, idx) => {
-                const fromMember = group.members.find((m: IMember) => m._id === t.from);
-                const pending = pendingSettlements.find((s: ISettlement) => s.from._id === t.from && s.to._id === userId);
+                const fromMember = group.members.find((m: GroupMember) => m._id === t.from);
+                const pending = pendingSettlements.find((s: Settlement) => s.from._id === t.from && s.to._id === userId);
 
                 return (
                   <div key={`receive-${idx}`} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
@@ -230,7 +251,7 @@ export default function GroupClient({
                           <ActionButton 
                             action={async () => {
                               await confirmReceived(groupId, pending._id);
-                              mutate();
+                              await mutate();
                             }}
                             variant="success"
                             className="px-4 py-2 text-xs"
@@ -244,7 +265,7 @@ export default function GroupClient({
                         <ActionButton 
                           action={async () => {
                             await directConfirm(groupId, t.from, t.amount);
-                            mutate();
+                            await mutate();
                           }}
                           variant="secondary"
                           className="px-4 py-2 text-xs"
@@ -273,7 +294,7 @@ export default function GroupClient({
 
           {bills.length > 0 ? (
             <div className="space-y-3">
-              {bills.map((bill: IBillWithPayer) => (
+              {bills.map((bill: BillWithPayer) => (
                 <div key={bill._id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400">
@@ -317,5 +338,27 @@ export default function GroupClient({
         </Link>
       </div>
     </main>
+  );
+}
+
+function BackToDashboard({
+  onBackToDashboard,
+}: {
+  onBackToDashboard?: () => void;
+}) {
+  const className = "p-2 bg-white rounded-xl shadow-sm border border-gray-100 text-gray-500 active:scale-95 transition-transform";
+
+  if (onBackToDashboard) {
+    return (
+      <button type="button" onClick={onBackToDashboard} className={className} aria-label="Back to dashboard">
+        <ChevronLeft size={24} />
+      </button>
+    );
+  }
+
+  return (
+    <Link href="/dashboard" className={className} aria-label="Back to dashboard">
+      <ChevronLeft size={24} />
+    </Link>
   );
 }
