@@ -72,7 +72,7 @@ export default function CreateGroupModal({
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 autoFocus
-                className="w-full px-4 py-4 rounded-xl border border-gray-200 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-lg transition-all"
+                className="w-full px-4 py-4 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-lg transition-all dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
               />
 
               <button

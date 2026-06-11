@@ -1,341 +1,444 @@
-# Nhiệm vụ: Sửa cache flow để click Group hiển thị dữ liệu đã preload ngay lập tức
+# Nhiệm vụ: Fix profile persistence, avatar/name sync, input contrast, và remove join-code UI
 
 ## Bối cảnh
 
-Project OurMoney đang dùng:
+Project: OurMoney
+Stack:
 
 * Next.js App Router
-* NextAuth
-* MongoDB/Mongoose
-* SWR hoặc cơ chế cache tương tự
-* Deploy Vercel
+* NextAuth / Google Login
+* MongoDB + Mongoose
+* SWR/client cache đã hoặc đang được dùng cho dashboard/group
 
-Phase trước đã cố làm cache + background revalidation, nhưng UX vẫn chưa đúng mục tiêu.
+Hiện tại app có một số lỗi sau:
 
-Hiện tượng hiện tại:
+## Bug 1: Đổi avatar/name không đồng bộ toàn app
 
-* Sau khi login/dashboard load xong, click vào group vẫn phải chờ route `/group/[id]?_rsc=...`.
-* Network vẫn cho thấy request RSC của `/group/[id]` mất khoảng 1.3s.
-* Điều này chứng tỏ app vẫn đang chờ server navigation trước khi Group UI được mount.
-* Cache có thể đã tồn tại, nhưng nó chỉ được dùng sau khi route group đã load xong, nên người dùng vẫn phải chờ.
+Hiện tượng:
 
-## Mục tiêu thật sự
+* Khi đổi avatar trong profile, avatar có cập nhật ngay ở một số chỗ.
+* Nhưng khi ra ngoài dashboard/trang chủ/global header thì avatar tổng không đổi.
+* Vào trong group thì avatar/name lại có cập nhật.
+* Tên ở profile và trang chủ vẫn hiển thị tên mặc định, không theo tên user đã chỉnh.
 
-Sau khi user đăng nhập:
+Yêu cầu:
 
-```txt
-Dashboard load
-→ app âm thầm preload dữ liệu group
-→ user click group
-→ hiển thị dữ liệu group từ cache ngay lập tức
-→ sau đó mới background fetch dữ liệu mới nhất
-→ nếu có thay đổi thì update UI
+* Sau khi user cập nhật name/avatar, toàn bộ UI phải đồng bộ:
+
+  * Profile page
+  * Header/navbar/global user avatar
+  * Dashboard/home
+  * Group member list
+  * Bill paidBy avatar/name
+  * Settlement from/to avatar/name nếu có hiển thị
+* Không để mỗi màn hình dùng một nguồn dữ liệu khác nhau gây lệch.
+
+Hướng xử lý đề xuất:
+
+1. Tạo hoặc kiểm tra endpoint current user:
+
+   * `GET /api/me`
+   * `PATCH /api/me`
+
+2. `GET /api/me` trả về user hiện tại từ database:
+
+```ts
+{
+  user: {
+    _id: string,
+    name: string,
+    image?: string,
+    email?: string
+  }
+}
 ```
 
-Không được để click group phải chờ `/group/[id]?_rsc=...` xong mới hiện UI.
+3. `PATCH /api/me` nhận:
 
-## Yêu cầu quan trọng
+```ts
+{
+  name?: string,
+  image?: string
+}
+```
 
-1. Không dùng realtime/websocket.
-2. Không rewrite toàn bộ app nếu không cần.
-3. Ưu tiên UX instant.
-4. Không làm hỏng auth, group, bill, settlement.
-5. Không prefetch toàn bộ nếu user có quá nhiều group.
-6. Không bắt user reload trang.
-7. Không bắt user bấm ra ngoài rồi vào lại để thấy dữ liệu mới.
+4. Khi update profile:
+
+   * Lưu vào MongoDB User collection.
+   * Return user mới nhất.
+   * Update cache ngay:
+
+```ts
+mutate("/api/me");
+mutate("/api/groups");
+mutate((key) => typeof key === "string" && key.startsWith("/api/groups/"));
+```
+
+5. Nếu dùng NextAuth session ở UI:
+
+   * Sau khi update profile, gọi `session.update()` nếu project có `useSession()`.
+   * Hoặc chuyển header/profile/global user UI sang đọc từ `/api/me` bằng SWR thay vì chỉ đọc `session.user`.
+
+Mục tiêu:
+
+* Không cần logout/login lại để thấy tên/avatar mới.
+* UI cập nhật ngay sau khi bấm Save.
 
 ---
 
-# Hướng sửa bắt buộc
+## Bug 2: Đăng nhập lại thì tên/avatar đã chỉnh bị mất
 
-## 1. Tạo Client Shell sau login
+Hiện tượng:
 
-Tạo một client component kiểu:
+* User đổi tên/avatar.
+* Sau khi đăng xuất/đăng nhập lại, tên/avatar quay về mặc định của Google hoặc biến mất.
 
-```txt
-MoneyClientShell
-```
+Nguyên nhân nghi ngờ:
 
-Shell này chịu trách nhiệm:
-
-* giữ current view hiện tại
-* giữ selectedGroupId
-* render DashboardView hoặc GroupDetailView
-* dùng SWR cache chung
-
-Ví dụ structure:
-
-```txt
-MoneyClientShell
-├── DashboardView
-├── GroupDetailView
-└── AddBillModal hoặc AddBillView
-```
-
-Server page như `/dashboard/page.tsx` chỉ nên:
-
-* check auth
-* fetch initial groups nếu cần
-* render `MoneyClientShell` với initial data
-
-## 2. Dashboard không được mở group bằng server navigation nếu muốn instant
-
-Tìm các chỗ đang dùng:
-
-```tsx
-<Link href={`/group/${group._id}`}>
-```
-
-hoặc:
-
-```tsx
-router.push(`/group/${group._id}`)
-```
-
-cho hành động click group.
-
-Với flow instant cache, đổi thành client action:
-
-```tsx
-onClick={() => openGroup(group._id)}
-```
-
-Trong `openGroup(groupId)`:
-
-```tsx
-setSelectedGroupId(groupId);
-setView("group");
-
-// Optional: chỉ đổi URL cho đẹp, không trigger Next.js navigation
-window.history.pushState(null, "", `/group/${groupId}`);
-```
-
-Không dùng `router.push()` cho bước mở group cache, vì `router.push()` sẽ trigger route navigation và RSC request.
-
-## 3. Preload data sau khi dashboard có group list
-
-Sau khi load danh sách group, preload data cho một số group:
-
-* 3–5 group gần nhất
-* hoặc group hiện trong viewport
-* hoặc group user hover
-
-Không prefetch tất cả nếu quá nhiều.
-
-Ví dụ với SWR:
-
-```tsx
-const { mutate } = useSWRConfig();
-
-useEffect(() => {
-  if (!groups?.length) return;
-
-  groups.slice(0, 5).forEach((group) => {
-    const key = `/api/groups/${group._id}`;
-
-    mutate(key, fetcher(key), {
-      populateCache: true,
-      revalidate: false,
-    });
-  });
-}, [groups, mutate]);
-```
-
-Có thể thêm hover prefetch:
-
-```tsx
-onMouseEnter={() => {
-  const key = `/api/groups/${group._id}`;
-
-  mutate(key, fetcher(key), {
-    populateCache: true,
-    revalidate: false,
-  });
-}}
-```
-
-## 4. GroupDetailView phải render từ SWR cache ngay
-
-`GroupDetailView` nhận `groupId`.
-
-Nó dùng SWR:
-
-```tsx
-const key = `/api/groups/${groupId}`;
-
-const { data, isLoading, isValidating, mutate } = useSWR(key, fetcher, {
-  revalidateOnMount: true,
-  revalidateOnFocus: true,
-  dedupingInterval: 5000,
-  keepPreviousData: true,
-});
-```
+* NextAuth callback đang overwrite database user bằng thông tin Google mỗi lần login.
+* Hoặc profile update chỉ nằm ở client state/cache/session, chưa lưu bền vào MongoDB.
+* Hoặc session/JWT không lấy dữ liệu custom từ database.
 
 Yêu cầu:
 
-* Nếu SWR cache đã có data, render ngay.
-* Không hiện full loading nếu cache đã có data.
-* Nếu đang background fetch thì chỉ hiện indicator nhỏ như “Đang cập nhật...”.
-* Nếu chưa có cache thì mới hiện skeleton/loading.
+* Tên/avatar user chỉnh phải persist trong MongoDB.
+* Đăng nhập lại vẫn giữ tên/avatar đã chỉnh.
+* Google profile chỉ dùng làm default lần đầu tạo user, không overwrite custom profile mỗi lần login.
 
-Pseudo:
+Hướng sửa auth:
 
-```tsx
-if (!data && isLoading) {
-  return <GroupSkeleton />;
+1. Kiểm tra `src/auth.ts`.
+2. Trong callback `jwt()` hoặc logic đăng nhập Google:
+
+   * Nếu user chưa tồn tại thì tạo user mới với name/image từ Google.
+   * Nếu user đã tồn tại thì KHÔNG overwrite custom `name` và `image` bằng Google profile.
+   * Chỉ update các field an toàn như email/googleId nếu cần.
+
+Ví dụ logic mong muốn:
+
+```ts
+let dbUser = await User.findOne({ googleId: profile.sub });
+
+if (!dbUser) {
+  dbUser = await User.create({
+    googleId: profile.sub,
+    email: user.email,
+    name: user.name,
+    image: user.image,
+  });
+} else {
+  // Không overwrite custom name/image ở đây
+  // Chỉ đảm bảo email/googleId tồn tại nếu cần
+  dbUser.email = dbUser.email || user.email;
+  dbUser.googleId = dbUser.googleId || profile.sub;
+  await dbUser.save();
 }
 
-return (
-  <>
-    {isValidating && <SmallUpdatingIndicator />}
-    <GroupContent data={data} />
-  </>
+token.userId = dbUser._id.toString();
+token.name = dbUser.name;
+token.picture = dbUser.image;
+```
+
+3. Nếu user update profile, đảm bảo database field được update:
+
+```ts
+User.findByIdAndUpdate(userId, {
+  name,
+  image,
+}, { new: true })
+```
+
+4. Nếu muốn phân biệt Google avatar và custom avatar, có thể thêm field:
+
+```ts
+name
+image
+googleImage
+```
+
+Nhưng không bắt buộc nếu sửa overwrite đúng.
+
+Acceptance:
+
+* Đổi tên/avatar → reload trang vẫn còn.
+* Logout/login lại → vẫn còn.
+* Không bị Google profile ghi đè.
+
+---
+
+## Bug 3: Header/navbar/avatar tổng không đổi
+
+Hiện tượng:
+
+* Avatar ở profile có đổi.
+* Nhưng avatar tổng/global avatar/navbar/home không đổi.
+
+Yêu cầu:
+
+* Tất cả component hiển thị current user phải dùng cùng một source.
+
+Hướng xử lý:
+
+1. Tạo hook:
+
+```ts
+useCurrentUser()
+```
+
+Hook này dùng SWR:
+
+```ts
+useSWR("/api/me", fetcher)
+```
+
+2. Header/Navbar/Profile/Home dùng `useCurrentUser()` thay vì mỗi nơi tự lấy session hoặc props cũ.
+
+3. Sau khi update profile:
+
+```ts
+mutate("/api/me", newUserData, { revalidate: false });
+mutate("/api/me");
+```
+
+4. Nếu session vẫn cần dùng:
+
+   * Dùng session chỉ để biết đã login hay chưa.
+   * Dữ liệu hiển thị name/avatar ưu tiên từ `/api/me`.
+
+---
+
+## Bug 4: Một số input bị chữ và màu nền trùng nhau
+
+Hiện tượng:
+
+* Ở một số ô nhập, text và background bị trùng màu.
+* Lỗi xuất hiện lúc trên mobile, lúc trên desktop.
+* Có thể liên quan dark mode/light mode hoặc Tailwind class thiếu `text-*` / `bg-*`.
+
+Yêu cầu:
+
+* Toàn bộ input/select/textarea phải đọc được rõ ở cả desktop/mobile.
+* Không để chữ trắng trên nền trắng hoặc chữ đen trên nền đen.
+* Placeholder cũng phải rõ.
+
+Việc cần làm:
+
+1. Search toàn bộ project:
+
+```bash
+grep -R "<input" src
+grep -R "<textarea" src
+grep -R "<select" src
+```
+
+2. Chuẩn hóa class cho input:
+
+```tsx
+className="w-full rounded-md border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
+```
+
+3. Nếu có component Input chung thì sửa ở component chung.
+4. Nếu chưa có component Input chung, cân nhắc tạo component dùng lại:
+
+```txt
+src/components/ui/Input.tsx
+```
+
+5. Kiểm tra các màn:
+
+* Login/home nếu có input
+* Profile edit name/avatar
+* Create group
+* Join group nếu còn
+* Add bill
+* Settlement/payment form
+* Mobile responsive
+
+Acceptance:
+
+* Input nhìn rõ trên desktop.
+* Input nhìn rõ trên mobile.
+* Dark/light mode không bị mất chữ.
+* Placeholder không bị trùng nền.
+
+---
+
+## Bug 5: Bỏ mã tham gia và ô nhập mã tham gia, chỉ giữ QR và link
+
+Hiện tại có UI hiển thị:
+
+* Mã tham gia group
+* Ô nhập mã tham gia
+
+Yêu cầu mới:
+
+* Xóa phần hiển thị mã tham gia dạng text.
+* Xóa ô nhập mã tham gia.
+* Chỉ giữ:
+
+  * QR code
+  * Invite link / copy link
+
+Lưu ý:
+
+* Không nhất thiết xóa field `inviteCode` trong database nếu link/QR vẫn cần dùng nó.
+* Chỉ xóa khỏi UI những phần:
+
+  * text code thủ công
+  * input nhập code thủ công
+  * button join bằng code nếu không còn cần
+
+Yêu cầu flow mới:
+
+* Người tạo group chia sẻ link hoặc QR.
+* Người khác bấm link hoặc quét QR để join group.
+* Không cần nhập code thủ công.
+
+Việc cần kiểm tra:
+
+1. Tìm các component liên quan:
+
+```bash
+grep -R "inviteCode" src
+grep -R "join code" src
+grep -R "Join Code" src
+grep -R "code" src/app src/components
+```
+
+2. Remove UI:
+
+* Code display
+* Code input
+* Join by code form
+
+3. Giữ UI:
+
+* QR code
+* Copy invite link button
+
+4. Đảm bảo invite link vẫn hoạt động:
+
+```txt
+/group/join?token=...
+```
+
+hoặc route hiện tại của project.
+
+5. Nếu backend hiện chỉ join bằng code, không xóa backend vội.
+
+   * Có thể giữ API cũ để tránh phá logic.
+   * Nhưng UI không dùng nó nữa.
+
+Acceptance:
+
+* Không còn thấy mã tham gia dạng text.
+* Không còn ô nhập mã tham gia.
+* QR còn hoạt động.
+* Copy invite link còn hoạt động.
+* Người dùng mới vẫn join được bằng link/QR.
+
+---
+
+## Bug 6: Cache không đồng bộ sau khi profile update
+
+Nếu project đang dùng SWR/cache:
+
+* Sau khi update profile phải invalidate/update các key liên quan.
+
+Các key cần xem:
+
+```txt
+/api/me
+/api/groups
+/api/groups/[id]
+```
+
+Sau update profile:
+
+```ts
+await mutate("/api/me");
+await mutate("/api/groups");
+await mutate(
+  (key) => typeof key === "string" && key.startsWith("/api/groups/")
 );
 ```
 
-## 5. Background fetch và auto update
+Nếu có local client shell state thì cũng cần update currentUser ở shell.
 
-Khi user mở group:
+Mục tiêu:
 
-* UI render cache ngay.
-* SWR tự fetch lại.
-* Nếu server trả data mới, UI update tự động.
-* Không yêu cầu user reload.
+* Không cần reload.
+* Không cần logout/login.
+* Không cần vào group mới thấy avatar mới.
 
-Có thể dùng field `version` từ API để debug data có đổi không.
+---
 
-## 6. API cần có
+# Thứ tự ưu tiên sửa
 
-Đảm bảo có:
+1. Fix profile save vào MongoDB và không bị Google overwrite sau login.
+2. Tạo/use `/api/me` làm single source cho current user.
+3. Đồng bộ cache sau update profile.
+4. Fix header/navbar/home/profile dùng current user mới.
+5. Fix input contrast.
+6. Remove join code UI, giữ QR + link.
+7. Chạy test/build.
 
-```txt
-GET /api/groups
-GET /api/groups/[id]
+---
+
+# Kiểm tra sau khi sửa
+
+Chạy:
+
+```bash
+npm run lint
+npm run build
 ```
 
-Yêu cầu:
+Test thủ công:
 
-* Verify auth.
-* Check quyền truy cập group.
-* Chỉ select field cần thiết.
-* Không trả field nhạy cảm như googleId, email nếu không cần, __v, token.
-* Dữ liệu phải đủ để render GroupDetailView.
+1. Login Google.
+2. Vào profile.
+3. Đổi tên.
+4. Đổi avatar.
+5. Save.
+6. Kiểm tra ngay:
 
-## 7. Back về Dashboard cũng không nên dùng server navigation
+   * Profile hiển thị tên/avatar mới.
+   * Header/navbar avatar đổi.
+   * Dashboard/home đổi.
+   * Group member/avatar đổi.
+7. Reload trang.
+8. Kiểm tra tên/avatar vẫn còn.
+9. Logout.
+10. Login lại.
+11. Kiểm tra tên/avatar vẫn giữ custom value, không bị reset về Google.
+12. Test trên mobile viewport:
 
-Khi đang ở GroupDetailView, nút Back nên làm:
+* input profile
+* input add bill
+* input create group
+* các form còn lại
 
-```tsx
-setView("dashboard");
-setSelectedGroupId(null);
-window.history.pushState(null, "", "/dashboard");
-```
+13. Kiểm tra invite UI:
 
-Không dùng `router.push("/dashboard")` nếu muốn dashboard hiện cache ngay.
+* Không còn mã tham gia dạng text.
+* Không còn ô nhập mã tham gia.
+* QR còn.
+* Copy link còn.
+* Join bằng link/QR vẫn hoạt động.
 
-## 8. Xử lý browser Back/Forward
+---
 
-Vì dùng `window.history.pushState`, cần nghe `popstate` để đồng bộ view khi user bấm nút Back của trình duyệt.
-
-Ví dụ:
-
-```tsx
-useEffect(() => {
-  const handlePopState = () => {
-    const path = window.location.pathname;
-
-    if (path.startsWith("/group/")) {
-      const groupId = path.split("/")[2];
-      setSelectedGroupId(groupId);
-      setView("group");
-    } else {
-      setSelectedGroupId(null);
-      setView("dashboard");
-    }
-  };
-
-  window.addEventListener("popstate", handlePopState);
-
-  return () => {
-    window.removeEventListener("popstate", handlePopState);
-  };
-}, []);
-```
-
-## 9. Sau mutation phải cập nhật cache
-
-Sau khi:
-
-* create bill
-* update bill
-* delete bill
-* join group
-* create settlement
-* update settlement
-
-Cần mutate đúng SWR key:
-
-```tsx
-mutate(`/api/groups/${groupId}`);
-mutate("/api/groups");
-```
-
-Nếu dễ, có thể optimistic update, nhưng không bắt buộc trong phase này.
-
-Không dùng `router.refresh()` nếu không cần.
-
-## 10. Giữ route `/group/[id]` cho deep link
-
-Vẫn nên giữ `/group/[id]/page.tsx` để user mở trực tiếp link group vẫn hoạt động.
-
-Nhưng flow click từ dashboard nên ưu tiên client shell instant view.
-
-Nếu user reload trực tiếp `/group/[id]`:
-
-* server page vẫn render bình thường.
-* không cần instant cache vì cache chưa có.
-
-## 11. Đo lại sau khi sửa
-
-Test flow:
-
-1. Login.
-2. Vào dashboard.
-3. Đợi 1–2 giây cho preload.
-4. Click group đã preload.
-5. UI phải hiện gần như ngay.
-6. Network có thể gọi `/api/groups/[id]` background, nhưng UI không được đợi request này.
-7. Bấm back về dashboard.
-8. Dashboard phải hiện ngay từ cache.
-9. Tạo bill mới.
-10. Group cache cập nhật đúng.
-
-## Acceptance Criteria
-
-Hoàn thành khi:
-
-* Click group từ dashboard không còn phải chờ `/group/[id]?_rsc=...` mới hiện UI.
-* Group đã preload hiển thị từ cache gần như tức thì.
-* Sau khi mở group, app background fetch dữ liệu mới nhất.
-* Nếu có dữ liệu mới, UI tự cập nhật.
-* Back về dashboard hiện ngay.
-* Browser Back/Forward hoạt động đúng.
-* Direct URL `/group/[id]` vẫn hoạt động.
-* Login Google vẫn hoạt động.
-* Add bill, settlement, group list vẫn hoạt động.
-* Không spam request.
-* Không lộ dữ liệu group của user khác.
-
-## Báo cáo sau khi hoàn thành
+# Báo cáo sau khi hoàn thành
 
 Hãy báo lại:
 
-1. Đã thêm Client Shell ở đâu.
-2. Flow click group cũ và mới khác nhau thế nào.
-3. Các route nào vẫn dùng server navigation.
-4. Các route/view nào đã dùng client cache.
-5. SWR keys đang dùng.
-6. Cách preload group data sau dashboard.
-7. Cách xử lý browser Back/Forward.
-8. Kết quả đo Network trước/sau.
-9. Rủi ro còn lại nếu có.
+1. Đã sửa/thêm những file nào.
+2. Nguyên nhân tên/avatar bị mất sau login là gì.
+3. Current user source hiện tại là gì: session hay `/api/me`.
+4. Cách cache được cập nhật sau profile update.
+5. Các màn đã kiểm tra avatar/name sync.
+6. Các input/form đã sửa màu.
+7. Các phần join code UI đã xóa.
+8. QR/link invite còn hoạt động bằng route nào.
+9. Có rủi ro còn lại không.

@@ -1,6 +1,7 @@
 import NextAuth, { type DefaultSession } from "next-auth"
 import Google from "next-auth/providers/google"
 import connectDB from "./lib/db"
+import { buildExistingGoogleUserPatch, toPublicUser, type PublicUserDocument } from "./lib/current-user"
 import User from "./models/User"
 
 declare module "next-auth" {
@@ -30,17 +31,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const existingUser = await User.findOne({ googleId });
           if (!existingUser) {
             await User.create({
-              name: user.name,
+              name: user.name || user.email || "User",
               email: user.email,
               image: user.image,
               googleId,
             });
           } else {
-            // Sync latest name and image from Google
-            existingUser.name = user.name as string;
-            existingUser.image = user.image as string;
-            if (user.email) existingUser.email = user.email;
-            await existingUser.save();
+            const patch = buildExistingGoogleUserPatch(existingUser, {
+              email: user.email,
+              googleId,
+              name: user.name,
+              image: user.image,
+            });
+
+            if (Object.keys(patch).length > 0) {
+              existingUser.set(patch);
+              await existingUser.save();
+            }
           }
           return true;
         } catch (error) {
@@ -56,16 +63,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         
         try {
           await connectDB();
-          const dbUser = (await User.findOne({ googleId: token.sub }).lean()) as any;
+          const dbUser = await User.findOne({ googleId: token.sub })
+            .select("name image email createdAt updatedAt")
+            .lean();
           if (dbUser) {
-            token.userId = dbUser._id.toString();
-            token.name = dbUser.name as string;
-            
-            if (dbUser.image && dbUser.image.startsWith('data:image/')) {
-              token.picture = `/api/user/avatar?userId=${dbUser._id.toString()}`;
-            } else {
-              token.picture = dbUser.image as string;
-            }
+            const publicUser = toPublicUser(dbUser as unknown as PublicUserDocument);
+            token.userId = publicUser._id;
+            token.name = publicUser.name;
+            token.picture = publicUser.image;
           }
         } catch (error) {
           console.error("Error fetching user in jwt:", error);

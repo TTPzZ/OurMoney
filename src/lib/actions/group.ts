@@ -5,6 +5,21 @@ import connectDB from "@/lib/db";
 import Group from "@/models/Group";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
+import mongoose from 'mongoose';
+
+type ObjectIdLike = { toString(): string };
+
+interface BillDebtSource {
+  paidBy: ObjectIdLike;
+  totalAmount: number;
+  splits: { userId: ObjectIdLike | string; amount: number }[];
+}
+
+interface SettlementDebtSource {
+  from: ObjectIdLike;
+  to: ObjectIdLike;
+  amount: number;
+}
 
 export async function createGroup(name: string) {
   const session = await auth();
@@ -39,8 +54,6 @@ export async function getGroups() {
   return JSON.parse(JSON.stringify(groups));
 }
 
-import mongoose from 'mongoose';
-
 export async function joinGroupByCode(code: string) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
@@ -57,7 +70,7 @@ export async function joinGroupByCode(code: string) {
   
   if (!group) throw new Error("Mã nhóm không tồn tại");
 
-  const isMember = group.members.some((m: any) => m.toString() === session.user.id);
+  const isMember = group.members.some((m: ObjectIdLike) => m.toString() === session.user.id);
   if (isMember) {
     return { success: true, groupId: group._id.toString() };
   }
@@ -118,14 +131,20 @@ export async function leaveGroup(groupId: string) {
     Settlement.find({ groupId, status: "completed" }).lean()
   ]);
 
-  const memberIds = group.members.map((m: any) => m.toString());
+  const memberIds = group.members.map((m: ObjectIdLike) => m.toString());
+  const billsForDebt = bills as unknown as BillDebtSource[];
+  const settlementsForDebt = settlements as unknown as SettlementDebtSource[];
   const transactions = simplifyDebts(
-    bills.map((b: any) => ({
+    billsForDebt.map((b) => ({
       ...b,
-      paidBy: b.paidBy.toString()
+      paidBy: b.paidBy.toString(),
+      splits: b.splits.map((split) => ({
+        userId: split.userId.toString(),
+        amount: split.amount,
+      })),
     })),
     memberIds,
-    settlements.map((s: any) => ({
+    settlementsForDebt.map((s) => ({
       from: s.from.toString(),
       to: s.to.toString(),
       amount: s.amount

@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { getGroupsForUser } from "@/lib/queries";
+import type { PublicUser } from "@/lib/current-user";
 import type { GroupListItem } from "@/lib/money-types";
 import MoneyClientShell from "./MoneyClientShell";
 
@@ -15,9 +16,11 @@ export default async function DashboardPage() {
       initialGroups={groups} 
       userId={session.user.id}
       user={{
-        name: session.user.name,
-        image: session.user.image
-      }} 
+        _id: session.user.id,
+        name: session.user.name || "User",
+        image: session.user.image || undefined,
+        email: session.user.email || undefined,
+      } satisfies PublicUser} 
     />
   );
 }

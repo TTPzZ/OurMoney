@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import GroupClient from "@/app/group/[id]/GroupClient";
+import type { PublicUser } from "@/lib/current-user";
 import type { GroupListItem } from "@/lib/money-types";
 import {
   getDashboardPath,
@@ -17,7 +18,7 @@ export default function MoneyClientShell({
   userId,
 }: {
   initialGroups: GroupListItem[];
-  user: { name?: string | null; image?: string | null };
+  user: PublicUser;
   userId: string;
 }) {
   const [shellState, setShellState] = useState<MoneyShellState>({

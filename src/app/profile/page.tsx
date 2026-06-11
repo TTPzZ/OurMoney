@@ -2,6 +2,7 @@ import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, LogOut } from "lucide-react";
+import type { PublicUser } from "@/lib/current-user";
 import ProfileClient from "./ProfileClient";
 import { SessionProvider } from "next-auth/react";
 
@@ -24,9 +25,12 @@ export default async function ProfilePage() {
 
       <SessionProvider session={session}>
         <ProfileClient 
-          initialName={session.user.name || ""} 
-          initialImage={session.user.image || ""} 
-          email={session.user.email || ""} 
+          initialUser={{
+            _id: session.user.id,
+            name: session.user.name || "",
+            image: session.user.image || undefined,
+            email: session.user.email || undefined,
+          } satisfies PublicUser}
         />
       </SessionProvider>
 

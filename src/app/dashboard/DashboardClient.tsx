@@ -1,26 +1,27 @@
 "use client";
 
-import { useSWRConfig } from "swr";
-import useSWR from "swr";
-import { fetcher } from "@/lib/fetcher";
 import { useEffect } from "react";
 import Link from "next/link";
-import { Users, ChevronRight, PlusCircle } from "lucide-react";
-import CreateGroupModal from "@/components/CreateGroupModal";
-import JoinGroupForm from "@/components/JoinGroupForm";
+import useSWR, { useSWRConfig } from "swr";
+import { ChevronRight, PlusCircle, Users } from "lucide-react";
 import Avatar from "@/components/Avatar";
+import CreateGroupModal from "@/components/CreateGroupModal";
+import { fetcher } from "@/lib/fetcher";
+import type { PublicUser } from "@/lib/current-user";
 import type { GroupListItem } from "@/lib/money-types";
+import { useCurrentUser } from "@/lib/use-current-user";
 
-export default function DashboardClient({ 
+export default function DashboardClient({
   initialGroups,
   user,
   onOpenGroup,
-}: { 
-  initialGroups: GroupListItem[],
-  user: { name?: string | null, image?: string | null },
-  onOpenGroup: (groupId: string) => void,
+}: {
+  initialGroups: GroupListItem[];
+  user: PublicUser;
+  onOpenGroup: (groupId: string) => void;
 }) {
   const { cache, mutate } = useSWRConfig();
+  const { user: currentUser } = useCurrentUser(user);
   const { data } = useSWR<{ groups: GroupListItem[] }>("/api/groups", fetcher, {
     fallbackData: { groups: initialGroups },
     revalidateOnMount: true,
@@ -28,13 +29,11 @@ export default function DashboardClient({
 
   const groups = data?.groups || initialGroups;
 
-  // Prefetch top 5 groups
   useEffect(() => {
     if (!groups?.length) return;
-    
+
     groups.slice(0, 5).forEach((group) => {
       const key = `/api/groups/${group._id}`;
-      // Check if already in cache or being fetched
       if (!cache.get(key)) {
         mutate(key, fetcher(key), {
           revalidate: false,
@@ -61,30 +60,24 @@ export default function DashboardClient({
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center p-6 pb-24 w-full">
-      {/* Header */}
       <div className="w-full max-w-md flex justify-between items-center mb-8 pt-4">
         <div>
           <h1 className="text-2xl font-black text-indigo-600">OurMoney</h1>
-          <p className="text-gray-500 font-medium tracking-tight">Xin chào, {user.name?.split(' ')[0]}! 👋</p>
+          <p className="text-gray-500 font-medium tracking-tight">
+            Xin chào, {currentUser?.name?.split(" ")[0]}! 👋
+          </p>
         </div>
         <Link href="/profile" className="relative active:scale-90 transition-transform">
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-lg bg-gray-200">
-            <Avatar src={user.image} name={user.name || "U"} size={48} />
+            <Avatar src={currentUser?.image} name={currentUser?.name || "U"} size={48} />
           </div>
-          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></div>
+          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full" />
         </Link>
       </div>
 
-      {/* Join Group Section */}
-      <div className="w-full max-w-md mb-8">
-        <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 mb-3">Tham gia bằng mã</h2>
-        <JoinGroupForm onOpenGroup={onOpenGroup} />
-      </div>
-
-      {/* Group List */}
       <div className="w-full max-w-md space-y-4">
         <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1">Nhóm của bạn</h2>
-        
+
         {groups.length > 0 ? (
           <div className="space-y-3">
             {groups.map((group) => (
@@ -121,7 +114,6 @@ export default function DashboardClient({
         )}
       </div>
 
-      {/* Floating Action Button / Fixed Bottom */}
       <div className="fixed bottom-8 w-full max-w-md px-6 flex justify-center">
         <CreateGroupModal onOpenGroup={onOpenGroup} />
       </div>

@@ -32,8 +32,9 @@ export default function ActionButton({
     startTransition(async () => {
       try {
         await action();
-      } catch (error: any) {
-        alert(error.message || "Đã có lỗi xảy ra");
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Đã có lỗi xảy ra";
+        alert(message);
       }
     });
   };

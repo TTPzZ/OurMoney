@@ -1,11 +1,17 @@
 import { auth, signIn } from "@/auth";
 import { redirect } from "next/navigation";
 
-export default async function Home() {
+export default async function Home({
+  searchParams,
+}: {
+  searchParams?: Promise<{ callbackUrl?: string }>;
+}) {
   const session = await auth();
+  const params = searchParams ? await searchParams : {};
+  const callbackUrl = getSafeCallbackUrl(params.callbackUrl);
 
   if (session) {
-    redirect("/dashboard");
+    redirect(callbackUrl || "/dashboard");
   }
 
   return (
@@ -24,7 +30,7 @@ export default async function Home() {
           <form
             action={async () => {
               "use server";
-              await signIn("google");
+              await signIn("google", callbackUrl ? { redirectTo: callbackUrl } : undefined);
             }}
           >
             <button
@@ -48,4 +54,12 @@ export default async function Home() {
       </div>
     </main>
   );
+}
+
+function getSafeCallbackUrl(callbackUrl?: string) {
+  if (!callbackUrl || !callbackUrl.startsWith("/") || callbackUrl.startsWith("//")) {
+    return undefined;
+  }
+
+  return callbackUrl;
 }

@@ -254,7 +254,7 @@ export default function AddBillForm({
               placeholder="Nội dung (ví dụ: Ăn trưa)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="flex-1 bg-transparent border-none outline-none text-lg font-bold placeholder:text-gray-300"
+              className="flex-1 bg-white text-gray-900 border-none outline-none text-lg font-bold placeholder:text-gray-400 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
             />
           </div>
           <div className="flex items-center gap-3 pt-2">
@@ -266,7 +266,7 @@ export default function AddBillForm({
               placeholder="Tổng số tiền"
               value={totalAmount}
               onChange={(e) => setTotalAmount(e.target.value === "" ? "" : Number(e.target.value))}
-              className="flex-1 bg-transparent border-none outline-none text-3xl font-black placeholder:text-gray-200"
+              className="flex-1 bg-white text-gray-900 border-none outline-none text-3xl font-black placeholder:text-gray-400 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
             />
           </div>
         </section>
@@ -395,7 +395,7 @@ export default function AddBillForm({
                           placeholder="0"
                           value={customAmounts[member._id] || ""}
                           onChange={(e) => handleCustomAmountChange(member._id, e.target.value)}
-                          className="w-24 text-right bg-indigo-50 px-2 py-1 rounded-lg outline-none font-black text-indigo-600 text-sm"
+                          className="w-24 text-right bg-white px-2 py-1 rounded-lg outline-none font-black text-indigo-600 placeholder:text-gray-400 text-sm border border-indigo-100 dark:bg-gray-900 dark:text-indigo-300 dark:placeholder:text-gray-500"
                         />
                       )}
                     </div>

@@ -2,6 +2,10 @@ import connectDB from "@/lib/db";
 import User from "@/models/User";
 import { NextRequest } from "next/server";
 
+interface AvatarUser {
+  image?: string;
+}
+
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const userId = searchParams.get("userId");
@@ -12,7 +16,7 @@ export async function GET(request: NextRequest) {
 
   try {
     await connectDB();
-    const user = await User.findById(userId).select("image").lean() as any;
+    const user = await User.findById(userId).select("image").lean<AvatarUser>();
 
     if (!user || !user.image) {
       return new Response("Image not found", { status: 404 });
@@ -28,7 +32,7 @@ export async function GET(request: NextRequest) {
       return new Response(imageBuffer, {
         headers: {
           "Content-Type": contentType,
-          "Cache-Control": "public, max-age=31536000, immutable",
+          "Cache-Control": "private, no-store",
         },
       });
     }

@@ -3,6 +3,12 @@ import Group from "@/models/Group";
 import Bill from "@/models/Bill";
 import Settlement from "@/models/Settlement";
 
+type ObjectIdLike = { toString(): string };
+
+interface PopulatedGroupForUser {
+  members: { _id: ObjectIdLike }[];
+}
+
 export async function getGroupsForUser(userId: string) {
   await connectDB();
   const groups = await Group.find({ members: userId })
@@ -14,13 +20,13 @@ export async function getGroupsForUser(userId: string) {
 
 export async function getGroupByIdForUser(groupId: string, userId: string) {
   await connectDB();
-  const group = (await Group.findById(groupId)
+  const group = await Group.findById(groupId)
     .populate("members", "name image")
     .select("name members createdBy inviteCode")
-    .lean()) as any;
+    .lean() as unknown as PopulatedGroupForUser | null;
   if (!group) return null;
   // Ensure user is member
-  const isMember = group.members.some((m: any) => m._id.toString() === userId);
+  const isMember = group.members.some((m) => m._id.toString() === userId);
   if (!isMember) return null;
   return JSON.parse(JSON.stringify(group));
 }
