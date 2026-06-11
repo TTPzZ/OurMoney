@@ -1,7 +1,6 @@
 import { auth } from "@/auth";
 import { joinGroupByCode } from "@/lib/actions/group";
 import { redirect } from "next/navigation";
-import { Loader2 } from "lucide-react";
 
 export default async function JoinPage({ params }: { params: Promise<{ code: string }> }) {
   const { code } = await params;
@@ -24,15 +23,10 @@ export default async function JoinPage({ params }: { params: Promise<{ code: str
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-slate-950 px-6">
-      <div className="bg-white dark:bg-slate-900 p-10 rounded-[2.5rem] shadow-xl shadow-slate-200/50 dark:shadow-none border border-slate-100 dark:border-slate-800 text-center space-y-6 w-full max-w-sm animate-pulse">
-        <div className="w-16 h-16 bg-indigo-50 dark:bg-indigo-900/20 rounded-2xl flex items-center justify-center mx-auto">
-          <Loader2 className="text-primary animate-spin" size={32} />
-        </div>
-        <div className="space-y-2">
-          <h2 className="text-xl font-black text-slate-900 dark:text-white">Joining Group</h2>
-          <p className="text-sm font-medium text-slate-400">Hang tight, we are adding you to the circle...</p>
-        </div>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="bg-white p-8 rounded-3xl shadow-sm text-center">
+        <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+        <p className="text-gray-500 font-medium">Đang tham gia nhóm...</p>
       </div>
     </div>
   );

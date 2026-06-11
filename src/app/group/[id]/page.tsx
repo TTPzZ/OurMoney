@@ -1,6 +1,7 @@
 import { getGroupByIdForUser, getBillsByGroupId, getSettlementsByGroupId } from "@/lib/queries";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
+import type { BillWithPayer, Settlement } from "@/lib/money-types";
 import GroupClient from "./GroupClient";
 
 export const preferredRegion = "sin1";
@@ -25,8 +26,8 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
       userId={session.user.id}
       initialData={{
         group,
-        bills: bills as any,
-        settlements: settlements as any
+        bills: bills as BillWithPayer[],
+        settlements: settlements as Settlement[]
       }}
     />
   );

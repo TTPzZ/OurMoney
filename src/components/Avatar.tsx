@@ -1,9 +1,3 @@
-"use client";
-
-import Image from "next/image";
-import { useState } from "react";
-import { User } from "lucide-react";
-
 export default function Avatar({ 
   src, 
   name, 
@@ -15,25 +9,19 @@ export default function Avatar({
   size?: number;
   className?: string;
 }) {
-  const [error, setError] = useState(false);
-
-  // Fallback to ui-avatars if src is missing or fails to load
-  const fallbackSrc = `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "User")}&background=6366f1&color=fff&bold=true`;
-  const displaySrc = (!src || error) ? fallbackSrc : src;
+  const displaySrc = src || `https://ui-avatars.com/api/?name=${encodeURIComponent(name || "User")}&background=random`;
 
   return (
-    <div 
-      className={`relative flex shrink-0 items-center justify-center overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800 ${className}`}
-      style={{ width: size, height: size }}
-    >
-      <Image
-        src={displaySrc}
-        alt={name || "User"}
-        width={size}
-        height={size}
-        className="aspect-square h-full w-full object-cover"
-        onError={() => setError(true)}
-      />
-    </div>
+    // User avatars can be internal API images or GIFs, so they bypass Next image optimization.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={displaySrc}
+      alt={name}
+      width={size}
+      height={size}
+      className={`object-cover w-full h-full ${className}`}
+      referrerPolicy="no-referrer"
+      loading="lazy"
+    />
   );
 }
