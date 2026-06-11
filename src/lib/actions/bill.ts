@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import connectDB from "@/lib/db";
 import Bill from "@/models/Bill";
 import { revalidatePath } from "next/cache";
+import { toPublicUser, USER_PUBLIC_SELECT, type PublicUserDocument } from "@/lib/current-user";
 
 export async function createBill(
   groupId: string,
@@ -37,9 +38,14 @@ export async function getBillsByGroupId(groupId: string) {
   await connectDB();
 
   const bills = await Bill.find({ groupId })
-    .populate("paidBy", "name image")
+    .populate("paidBy", USER_PUBLIC_SELECT)
     .sort({ createdAt: -1 })
     .lean();
 
-  return JSON.parse(JSON.stringify(bills));
+  return JSON.parse(JSON.stringify(
+    bills.map((bill) => ({
+      ...bill,
+      paidBy: toPublicUser(bill.paidBy as unknown as PublicUserDocument),
+    })),
+  ));
 }

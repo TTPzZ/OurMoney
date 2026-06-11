@@ -1,10 +1,12 @@
 "use client";
 
+import { useState } from "react";
 import useSWR from "swr";
 import { useSWRConfig } from "swr";
 import { fetcher } from "@/lib/fetcher";
 import { simplifyDebts } from "@/lib/utils/debt";
 import GroupInviteQR from "@/components/GroupInviteQR";
+import GroupMembersDialog from "@/components/GroupMembersDialog";
 import Link from "next/link";
 import { ChevronLeft, Plus, Receipt, Landmark, Trash2, CheckCircle2, Clock, LogOut } from "lucide-react";
 import Avatar from "@/components/Avatar";
@@ -26,6 +28,7 @@ export default function GroupClient({
   onBackToDashboard?: () => void,
 }) {
   const router = useRouter();
+  const [showMembers, setShowMembers] = useState(false);
   const { mutate: mutateGlobal } = useSWRConfig();
   const { data, error, mutate, isLoading, isValidating } = useSWR<GroupDetailData>(
     `/api/groups/${groupId}`, 
@@ -153,13 +156,23 @@ export default function GroupClient({
               <LogOut size={20} />
             </ActionButton>
           )}
-          <div className="flex -space-x-2">
+          <button
+            type="button"
+            onClick={() => setShowMembers(true)}
+            className="flex -space-x-2 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            aria-label="Xem danh sách thành viên"
+          >
             {group.members.slice(0, 3).map((member: GroupMember) => (
               <div key={member._id} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-gray-200">
                 <Avatar src={member.image} name={member.name} size={32} />
               </div>
             ))}
-          </div>
+            {group.members.length > 3 && (
+              <span className="flex h-8 min-w-8 items-center justify-center rounded-full border-2 border-white bg-gray-100 px-1.5 text-[10px] font-black text-gray-500">
+                +{group.members.length - 3}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
@@ -337,6 +350,12 @@ export default function GroupClient({
           Thêm hóa đơn mới
         </Link>
       </div>
+
+      <GroupMembersDialog
+        open={showMembers}
+        onClose={() => setShowMembers(false)}
+        members={group.members}
+      />
     </main>
   );
 }

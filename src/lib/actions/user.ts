@@ -13,7 +13,9 @@ export async function updateUserProfile(name: string, image: string) {
 
   await User.findByIdAndUpdate(session.user.id, {
     name,
-    image
+    image,
+    customName: name,
+    customImage: image,
   });
 
   revalidatePath("/dashboard");

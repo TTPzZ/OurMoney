@@ -5,6 +5,7 @@ import {
   buildExistingGoogleUserPatch,
   getGroupDetailCachePredicate,
   getPublicUserImage,
+  toPublicUser,
 } from "./current-user";
 
 test("existing Google users keep custom name and image on sign in", () => {
@@ -12,8 +13,10 @@ test("existing Google users keep custom name and image on sign in", () => {
     {
       email: "custom@example.com",
       googleId: "google-1",
-      name: "Custom Name",
-      image: "custom-avatar",
+      googleName: "Old Google Name",
+      googleImage: "old-google-avatar",
+      customName: "Custom Name",
+      customImage: "custom-avatar",
     },
     {
       email: "google@example.com",
@@ -23,14 +26,17 @@ test("existing Google users keep custom name and image on sign in", () => {
     },
   );
 
-  assert.deepEqual(patch, {});
+  assert.deepEqual(patch, {
+    googleName: "Google Name",
+    googleImage: "google-avatar",
+  });
 });
 
 test("existing Google user patch only fills missing safe identity fields", () => {
   const patch = buildExistingGoogleUserPatch(
     {
-      name: "Custom Name",
-      image: "custom-avatar",
+      customName: "Custom Name",
+      customImage: "custom-avatar",
     },
     {
       email: "google@example.com",
@@ -43,6 +49,8 @@ test("existing Google user patch only fills missing safe identity fields", () =>
   assert.deepEqual(patch, {
     email: "google@example.com",
     googleId: "google-1",
+    googleName: "Google Name",
+    googleImage: "google-avatar",
   });
 });
 
@@ -52,6 +60,45 @@ test("base64 avatars are exposed through the avatar route", () => {
     "/api/user/avatar?userId=user-1&v=123",
   );
   assert.equal(getPublicUserImage("user-1", "https://example.com/a.png", 123), "https://example.com/a.png");
+});
+
+test("public user prefers custom profile and exposes reset state", () => {
+  const user = toPublicUser({
+    _id: "user-1",
+    email: "user@example.com",
+    googleName: "Google Name",
+    googleImage: "google-avatar",
+    customName: "Custom Name",
+    customImage: "data:image/gif;base64,abc",
+    updatedAt: 123,
+  });
+
+  assert.deepEqual(user, {
+    _id: "user-1",
+    email: "user@example.com",
+    name: "Custom Name",
+    image: "/api/user/avatar?userId=user-1&v=123",
+    customName: "Custom Name",
+    customImage: "/api/user/avatar?userId=user-1&v=123",
+    googleName: "Google Name",
+    googleImage: "google-avatar",
+  });
+});
+
+test("public user falls back to Google profile when custom profile is reset", () => {
+  const user = toPublicUser({
+    _id: "user-1",
+    email: "user@example.com",
+    googleName: "Google Name",
+    googleImage: "google-avatar",
+    customName: null,
+    customImage: null,
+  });
+
+  assert.equal(user.name, "Google Name");
+  assert.equal(user.image, "google-avatar");
+  assert.equal(user.customName, undefined);
+  assert.equal(user.customImage, undefined);
 });
 
 test("group detail cache predicate only targets individual group keys", () => {

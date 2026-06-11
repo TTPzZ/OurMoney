@@ -1,5 +1,5 @@
 import { ArrowRight, Landmark } from "lucide-react";
-import Image from "next/image";
+import Avatar from "@/components/Avatar";
 
 interface Member {
   _id: string;
@@ -45,13 +45,7 @@ export default function SettlementView({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-full overflow-hidden border">
-                  {fromMember?.image ? (
-                    <Image src={fromMember.image} alt={fromMember.name} width={40} height={40} />
-                  ) : (
-                    <div className="w-full h-full bg-gray-50 flex items-center justify-center text-xs font-bold text-gray-400">
-                      {fromMember?.name.charAt(0)}
-                    </div>
-                  )}
+                  <Avatar src={fromMember?.image} name={fromMember?.name || "User"} size={40} />
                 </div>
                 <span className="font-bold text-gray-900">{fromMember?.name.split(" ")[0]}</span>
               </div>
@@ -64,13 +58,7 @@ export default function SettlementView({
               <div className="flex items-center gap-3">
                 <span className="font-bold text-gray-900">{toMember?.name.split(" ")[0]}</span>
                 <div className="w-10 h-10 rounded-full overflow-hidden border">
-                  {toMember?.image ? (
-                    <Image src={toMember.image} alt={toMember.name} width={40} height={40} />
-                  ) : (
-                    <div className="w-full h-full bg-gray-50 flex items-center justify-center text-xs font-bold text-gray-400">
-                      {toMember?.name.charAt(0)}
-                    </div>
-                  )}
+                  <Avatar src={toMember?.image} name={toMember?.name || "User"} size={40} />
                 </div>
               </div>
             </div>

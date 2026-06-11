@@ -6,6 +6,7 @@ import Group from "@/models/Group";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
 import mongoose from 'mongoose';
+import { toPublicUser, USER_PUBLIC_SELECT, type PublicUserDocument } from "@/lib/current-user";
 
 type ObjectIdLike = { toString(): string };
 
@@ -19,6 +20,10 @@ interface SettlementDebtSource {
   from: ObjectIdLike;
   to: ObjectIdLike;
   amount: number;
+}
+
+interface PopulatedGroup {
+  members: PublicUserDocument[];
 }
 
 export async function createGroup(name: string) {
@@ -171,10 +176,13 @@ export async function getGroupById(id: string) {
   await connectDB();
   
   const group = await Group.findById(id)
-    .populate("members", "name image")
-    .lean();
+    .populate("members", USER_PUBLIC_SELECT)
+    .lean<PopulatedGroup>();
     
   if (!group) return null;
   
-  return JSON.parse(JSON.stringify(group));
+  return JSON.parse(JSON.stringify({
+    ...group,
+    members: group.members.map((member) => toPublicUser(member as unknown as PublicUserDocument)),
+  }));
 }

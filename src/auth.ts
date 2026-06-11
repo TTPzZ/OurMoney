@@ -1,7 +1,12 @@
 import NextAuth, { type DefaultSession } from "next-auth"
 import Google from "next-auth/providers/google"
 import connectDB from "./lib/db"
-import { buildExistingGoogleUserPatch, toPublicUser, type PublicUserDocument } from "./lib/current-user"
+import {
+  buildExistingGoogleUserPatch,
+  toPublicUser,
+  USER_PUBLIC_SELECT,
+  type PublicUserDocument,
+} from "./lib/current-user"
 import User from "./models/User"
 
 declare module "next-auth" {
@@ -30,11 +35,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           const existingUser = await User.findOne({ googleId });
           if (!existingUser) {
+            const googleName = user.name || user.email || "User";
             await User.create({
-              name: user.name || user.email || "User",
+              name: googleName,
               email: user.email,
               image: user.image,
               googleId,
+              googleName,
+              googleImage: user.image,
+              customName: null,
+              customImage: null,
             });
           } else {
             const patch = buildExistingGoogleUserPatch(existingUser, {
@@ -64,7 +74,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           await connectDB();
           const dbUser = await User.findOne({ googleId: token.sub })
-            .select("name image email createdAt updatedAt")
+            .select(USER_PUBLIC_SELECT)
             .lean();
           if (dbUser) {
             const publicUser = toPublicUser(dbUser as unknown as PublicUserDocument);

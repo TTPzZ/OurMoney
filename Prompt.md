@@ -1,120 +1,213 @@
-# Nhiệm vụ: Fix profile persistence, avatar/name sync, input contrast, và remove join-code UI
+# Nhiệm vụ: Fix avatar API render, reset profile về mặc định Google, và member list trong group
 
 ## Bối cảnh
 
-Project: OurMoney
-Stack:
+Project OurMoney đang dùng:
 
 * Next.js App Router
-* NextAuth / Google Login
-* MongoDB + Mongoose
-* SWR/client cache đã hoặc đang được dùng cho dashboard/group
+* NextAuth Google Login
+* MongoDB/Mongoose
+* Vercel
 
-Hiện tại app có một số lỗi sau:
+Hiện tại khi upload/render avatar custom bị lỗi:
 
-## Bug 1: Đổi avatar/name không đồng bộ toàn app
+```txt
+Bad request
+INVALID_IMAGE_OPTIMIZE_REQUEST
+```
 
-Hiện tượng:
+Request lỗi:
 
-* Khi đổi avatar trong profile, avatar có cập nhật ngay ở một số chỗ.
-* Nhưng khi ra ngoài dashboard/trang chủ/global header thì avatar tổng không đổi.
-* Vào trong group thì avatar/name lại có cập nhật.
-* Tên ở profile và trang chủ vẫn hiển thị tên mặc định, không theo tên user đã chỉnh.
+```txt
+/_next/image?url=%2Fapi%2Fuser%2Favatar%3FuserId%3D...&w=128&q=75
+```
+
+Điều này cho thấy app đang dùng Next `<Image />` để optimize ảnh từ internal API route:
+
+```txt
+/api/user/avatar?userId=...
+```
+
+Yêu cầu là sửa avatar render giống kiểu Google avatar: hiển thị trực tiếp, hỗ trợ cả GIF, không bị Vercel Image Optimization lỗi 400.
+
+---
+
+# Mục tiêu chính
+
+1. Fix lỗi `INVALID_IMAGE_OPTIMIZE_REQUEST`.
+2. Avatar custom và Google avatar đều hiển thị ổn.
+3. Avatar GIF hiển thị được.
+4. Có tính năng xóa tên custom để khôi phục tên mặc định từ Google.
+5. Có tính năng xóa ảnh custom để khôi phục avatar mặc định từ Google.
+6. Trong group, bấm vào cụm avatar thành viên góc phải để mở danh sách thành viên.
+
+---
+
+# Phần 1: Fix render avatar
+
+## Vấn đề hiện tại
+
+Có chỗ đang render avatar kiểu:
+
+```tsx
+<Image src={`/api/user/avatar?userId=${userId}&v=${...}`} ... />
+```
+
+Next/Vercel sẽ biến nó thành:
+
+```txt
+/_next/image?url=/api/user/avatar...
+```
+
+và gây lỗi 400 nếu API route không tương thích với Image Optimizer.
+
+## Yêu cầu sửa
+
+Tìm toàn bộ chỗ render avatar/user image/member image:
+
+```bash
+grep -R "next/image" src
+grep -R "<Image" src
+grep -R "avatar" src
+grep -R "user.image" src
+```
+
+Với avatar người dùng, đổi sang component avatar chung, ví dụ:
+
+```txt
+src/components/UserAvatar.tsx
+```
+
+Component này nên dùng `<img>` thường, không dùng Next Image optimizer.
+
+Ví dụ:
+
+```tsx
+type UserAvatarProps = {
+  src?: string | null;
+  name?: string | null;
+  size?: number;
+  className?: string;
+};
+
+export function UserAvatar({
+  src,
+  name,
+  size = 40,
+  className = "",
+}: UserAvatarProps) {
+  const fallback = "/default-avatar.png";
+
+  return (
+    <img
+      src={src || fallback}
+      alt={name || "User avatar"}
+      width={size}
+      height={size}
+      className={`rounded-full object-cover ${className}`}
+      referrerPolicy="no-referrer"
+      loading="lazy"
+    />
+  );
+}
+```
+
+Nếu có lý do bắt buộc dùng Next Image, phải thêm `unoptimized`:
+
+```tsx
+<Image
+  src={src || "/default-avatar.png"}
+  alt={name || "User avatar"}
+  width={size}
+  height={size}
+  unoptimized
+/>
+```
+
+Nhưng ưu tiên `<img>` để hỗ trợ GIF và tránh lỗi optimize.
+
+Acceptance:
+
+* Không còn request `/_next/image?.../api/user/avatar...` cho avatar user.
+* Avatar custom không còn lỗi 400.
+* GIF avatar vẫn động.
+* Google avatar vẫn hiển thị.
+
+---
+
+# Phần 2: Chuẩn hóa avatar URL
+
+Hiện tại avatar có thể là:
+
+* Google image URL
+* Custom uploaded avatar
+* API route `/api/user/avatar?userId=...`
 
 Yêu cầu:
 
-* Sau khi user cập nhật name/avatar, toàn bộ UI phải đồng bộ:
+* UI chỉ cần nhận `displayImage`.
+* `displayImage` ưu tiên custom avatar, nếu không có thì dùng Google avatar.
 
-  * Profile page
-  * Header/navbar/global user avatar
-  * Dashboard/home
-  * Group member list
-  * Bill paidBy avatar/name
-  * Settlement from/to avatar/name nếu có hiển thị
-* Không để mỗi màn hình dùng một nguồn dữ liệu khác nhau gây lệch.
+Trong User model nên có các field rõ ràng:
 
-Hướng xử lý đề xuất:
+```ts
+name: string
+image?: string              // custom display avatar hoặc avatar hiện tại
+googleName?: string
+googleImage?: string
+customName?: string
+customImage?: string
+```
 
-1. Tạo hoặc kiểm tra endpoint current user:
+Nếu chưa muốn migrate nhiều, có thể dùng logic:
 
-   * `GET /api/me`
-   * `PATCH /api/me`
+```ts
+displayName = user.name || user.googleName || user.email
+displayImage = user.image || user.googleImage
+```
 
-2. `GET /api/me` trả về user hiện tại từ database:
+Nhưng để hỗ trợ reset mặc định, nên tách:
+
+```ts
+googleName
+googleImage
+customName
+customImage
+```
+
+Sau đó API `/api/me` trả:
 
 ```ts
 {
   user: {
-    _id: string,
-    name: string,
-    image?: string,
-    email?: string
+    _id,
+    email,
+    name: customName || googleName,
+    image: customImage || googleImage,
+    customName,
+    customImage,
+    googleName,
+    googleImage
   }
 }
 ```
 
-3. `PATCH /api/me` nhận:
-
-```ts
-{
-  name?: string,
-  image?: string
-}
-```
-
-4. Khi update profile:
-
-   * Lưu vào MongoDB User collection.
-   * Return user mới nhất.
-   * Update cache ngay:
-
-```ts
-mutate("/api/me");
-mutate("/api/groups");
-mutate((key) => typeof key === "string" && key.startsWith("/api/groups/"));
-```
-
-5. Nếu dùng NextAuth session ở UI:
-
-   * Sau khi update profile, gọi `session.update()` nếu project có `useSession()`.
-   * Hoặc chuyển header/profile/global user UI sang đọc từ `/api/me` bằng SWR thay vì chỉ đọc `session.user`.
-
-Mục tiêu:
-
-* Không cần logout/login lại để thấy tên/avatar mới.
-* UI cập nhật ngay sau khi bấm Save.
-
 ---
 
-## Bug 2: Đăng nhập lại thì tên/avatar đã chỉnh bị mất
+# Phần 3: Không để Google overwrite custom profile khi login
 
-Hiện tượng:
+Kiểm tra `src/auth.ts`.
 
-* User đổi tên/avatar.
-* Sau khi đăng xuất/đăng nhập lại, tên/avatar quay về mặc định của Google hoặc biến mất.
+Khi user login bằng Google:
 
-Nguyên nhân nghi ngờ:
+* Nếu user chưa tồn tại: tạo user với googleName/googleImage.
+* Nếu user đã tồn tại:
 
-* NextAuth callback đang overwrite database user bằng thông tin Google mỗi lần login.
-* Hoặc profile update chỉ nằm ở client state/cache/session, chưa lưu bền vào MongoDB.
-* Hoặc session/JWT không lấy dữ liệu custom từ database.
+  * update `googleName`, `googleImage`, `email` nếu cần
+  * KHÔNG overwrite `customName`, `customImage`
+  * display name/avatar phải ưu tiên custom.
 
-Yêu cầu:
-
-* Tên/avatar user chỉnh phải persist trong MongoDB.
-* Đăng nhập lại vẫn giữ tên/avatar đã chỉnh.
-* Google profile chỉ dùng làm default lần đầu tạo user, không overwrite custom profile mỗi lần login.
-
-Hướng sửa auth:
-
-1. Kiểm tra `src/auth.ts`.
-2. Trong callback `jwt()` hoặc logic đăng nhập Google:
-
-   * Nếu user chưa tồn tại thì tạo user mới với name/image từ Google.
-   * Nếu user đã tồn tại thì KHÔNG overwrite custom `name` và `image` bằng Google profile.
-   * Chỉ update các field an toàn như email/googleId nếu cần.
-
-Ví dụ logic mong muốn:
+Pseudo:
 
 ```ts
 let dbUser = await User.findOne({ googleId: profile.sub });
@@ -123,269 +216,259 @@ if (!dbUser) {
   dbUser = await User.create({
     googleId: profile.sub,
     email: user.email,
-    name: user.name,
-    image: user.image,
+    googleName: user.name,
+    googleImage: user.image,
+    customName: null,
+    customImage: null,
   });
 } else {
-  // Không overwrite custom name/image ở đây
-  // Chỉ đảm bảo email/googleId tồn tại nếu cần
-  dbUser.email = dbUser.email || user.email;
-  dbUser.googleId = dbUser.googleId || profile.sub;
+  dbUser.email = user.email || dbUser.email;
+  dbUser.googleName = user.name || dbUser.googleName;
+  dbUser.googleImage = user.image || dbUser.googleImage;
   await dbUser.save();
 }
 
 token.userId = dbUser._id.toString();
-token.name = dbUser.name;
-token.picture = dbUser.image;
+token.name = dbUser.customName || dbUser.googleName;
+token.picture = dbUser.customImage || dbUser.googleImage;
 ```
-
-3. Nếu user update profile, đảm bảo database field được update:
-
-```ts
-User.findByIdAndUpdate(userId, {
-  name,
-  image,
-}, { new: true })
-```
-
-4. Nếu muốn phân biệt Google avatar và custom avatar, có thể thêm field:
-
-```ts
-name
-image
-googleImage
-```
-
-Nhưng không bắt buộc nếu sửa overwrite đúng.
 
 Acceptance:
 
-* Đổi tên/avatar → reload trang vẫn còn.
-* Logout/login lại → vẫn còn.
-* Không bị Google profile ghi đè.
+* Đổi tên/avatar custom không bị mất sau logout/login.
+* Google name/avatar chỉ là default.
+* Custom profile luôn được ưu tiên.
 
 ---
 
-## Bug 3: Header/navbar/avatar tổng không đổi
+# Phần 4: API cập nhật profile và reset về mặc định
 
-Hiện tượng:
+Kiểm tra hoặc tạo:
 
-* Avatar ở profile có đổi.
-* Nhưng avatar tổng/global avatar/navbar/home không đổi.
-
-Yêu cầu:
-
-* Tất cả component hiển thị current user phải dùng cùng một source.
-
-Hướng xử lý:
-
-1. Tạo hook:
-
-```ts
-useCurrentUser()
+```txt
+GET /api/me
+PATCH /api/me
 ```
 
-Hook này dùng SWR:
+## PATCH /api/me
+
+Hỗ trợ update custom name/avatar:
 
 ```ts
-useSWR("/api/me", fetcher)
+{
+  name?: string,
+  image?: string
+}
 ```
 
-2. Header/Navbar/Profile/Home dùng `useCurrentUser()` thay vì mỗi nơi tự lấy session hoặc props cũ.
+Khi nhận:
 
-3. Sau khi update profile:
+* `name` thì lưu vào `customName`
+* `image` thì lưu vào `customImage`
+
+## Reset name
+
+Thêm action/API:
+
+```txt
+DELETE /api/me/name
+```
+
+hoặc dùng PATCH:
 
 ```ts
-mutate("/api/me", newUserData, { revalidate: false });
+{
+  resetName: true
+}
+```
+
+Khi reset:
+
+* set `customName = null`
+* display name quay lại `googleName`
+
+## Reset avatar
+
+Thêm action/API:
+
+```txt
+DELETE /api/me/avatar
+```
+
+hoặc dùng PATCH:
+
+```ts
+{
+  resetImage: true
+}
+```
+
+Khi reset:
+
+* set `customImage = null`
+* display image quay lại `googleImage`
+
+Acceptance:
+
+* Bấm “Khôi phục tên mặc định” → tên quay lại Google name.
+* Bấm “Khôi phục ảnh mặc định” → avatar quay lại Google avatar.
+* Reload vẫn đúng.
+* Logout/login vẫn đúng.
+
+---
+
+# Phần 5: UI Profile thêm nút reset
+
+Trong profile edit UI thêm:
+
+```txt
+Khôi phục tên mặc định
+Khôi phục ảnh mặc định
+```
+
+Chỉ hiện nút nếu đang có custom value:
+
+```ts
+if (user.customName) show reset name
+if (user.customImage) show reset avatar
+```
+
+Sau khi reset:
+
+* mutate `/api/me`
+* mutate `/api/groups`
+* mutate các `/api/groups/[id]` nếu dùng SWR
+* update session nếu app đang dùng NextAuth `useSession().update()`
+
+Pseudo:
+
+```ts
+await patchMe({ resetImage: true });
+
 mutate("/api/me");
+mutate("/api/groups");
+mutate((key) => typeof key === "string" && key.startsWith("/api/groups/"));
 ```
-
-4. Nếu session vẫn cần dùng:
-
-   * Dùng session chỉ để biết đã login hay chưa.
-   * Dữ liệu hiển thị name/avatar ưu tiên từ `/api/me`.
 
 ---
 
-## Bug 4: Một số input bị chữ và màu nền trùng nhau
+# Phần 6: Fix `/api/user/avatar`
 
-Hiện tượng:
+Nếu vẫn giữ route:
 
-* Ở một số ô nhập, text và background bị trùng màu.
-* Lỗi xuất hiện lúc trên mobile, lúc trên desktop.
-* Có thể liên quan dark mode/light mode hoặc Tailwind class thiếu `text-*` / `bg-*`.
+```txt
+/api/user/avatar?userId=...
+```
+
+Đảm bảo route trả raw image đúng chuẩn:
+
+* status 200
+* header `Content-Type` đúng: `image/png`, `image/jpeg`, `image/gif`, `image/webp`
+* không trả JSON khi thành công
+* nếu không có avatar thì redirect hoặc trả default image hợp lệ
+* có cache header hợp lý
+
+Ví dụ:
+
+```ts
+return new NextResponse(buffer, {
+  headers: {
+    "Content-Type": contentType,
+    "Cache-Control": "public, max-age=3600",
+  },
+});
+```
+
+Nhưng lưu ý:
+
+* UI avatar vẫn không được render route này bằng Next `<Image />` optimize.
+* Dùng `<img src="/api/user/avatar?...">`.
+
+---
+
+# Phần 7: Bấm avatar thành viên trong group để xem danh sách member
+
+Hiện trong group có cụm avatar thành viên ở góc phải.
 
 Yêu cầu:
 
-* Toàn bộ input/select/textarea phải đọc được rõ ở cả desktop/mobile.
-* Không để chữ trắng trên nền trắng hoặc chữ đen trên nền đen.
-* Placeholder cũng phải rõ.
+* Cho phép click vào cụm avatar đó.
+* Khi click, mở modal/drawer hiển thị danh sách thành viên group.
 
-Việc cần làm:
+UI mong muốn:
 
-1. Search toàn bộ project:
+* Tiêu đề: “Thành viên”
+* Danh sách:
 
-```bash
-grep -R "<input" src
-grep -R "<textarea" src
-grep -R "<select" src
+  * avatar
+  * tên
+  * email nếu app đang cho phép hiển thị, nếu không thì bỏ
+* Có nút đóng.
+* Mobile thân thiện.
+
+Ví dụ component:
+
+```txt
+GroupMembersDialog
 ```
 
-2. Chuẩn hóa class cho input:
+Trigger:
 
 ```tsx
-className="w-full rounded-md border border-gray-300 bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
+<button onClick={() => setShowMembers(true)}>
+  <AvatarStack members={group.members} />
+</button>
 ```
 
-3. Nếu có component Input chung thì sửa ở component chung.
-4. Nếu chưa có component Input chung, cân nhắc tạo component dùng lại:
+Modal:
 
-```txt
-src/components/ui/Input.tsx
+```tsx
+<GroupMembersDialog
+  open={showMembers}
+  onClose={() => setShowMembers(false)}
+  members={group.members}
+/>
 ```
 
-5. Kiểm tra các màn:
+Yêu cầu:
 
-* Login/home nếu có input
-* Profile edit name/avatar
-* Create group
-* Join group nếu còn
-* Add bill
-* Settlement/payment form
-* Mobile responsive
+* Avatar trong modal dùng component `UserAvatar`.
+* Không dùng Next Image optimizer cho avatar.
+* Nếu member có custom avatar thì hiển thị custom.
+* Nếu không có custom avatar thì hiển thị Google avatar/default avatar.
 
 Acceptance:
 
-* Input nhìn rõ trên desktop.
-* Input nhìn rõ trên mobile.
-* Dark/light mode không bị mất chữ.
-* Placeholder không bị trùng nền.
+* Click avatar stack góc phải mở danh sách thành viên.
+* Đóng modal hoạt động.
+* Mobile hiển thị đẹp.
+* Không lỗi ảnh avatar.
 
 ---
 
-## Bug 5: Bỏ mã tham gia và ô nhập mã tham gia, chỉ giữ QR và link
+# Phần 8: Cache sync sau profile update/reset
 
-Hiện tại có UI hiển thị:
+Nếu app dùng SWR:
 
-* Mã tham gia group
-* Ô nhập mã tham gia
-
-Yêu cầu mới:
-
-* Xóa phần hiển thị mã tham gia dạng text.
-* Xóa ô nhập mã tham gia.
-* Chỉ giữ:
-
-  * QR code
-  * Invite link / copy link
-
-Lưu ý:
-
-* Không nhất thiết xóa field `inviteCode` trong database nếu link/QR vẫn cần dùng nó.
-* Chỉ xóa khỏi UI những phần:
-
-  * text code thủ công
-  * input nhập code thủ công
-  * button join bằng code nếu không còn cần
-
-Yêu cầu flow mới:
-
-* Người tạo group chia sẻ link hoặc QR.
-* Người khác bấm link hoặc quét QR để join group.
-* Không cần nhập code thủ công.
-
-Việc cần kiểm tra:
-
-1. Tìm các component liên quan:
-
-```bash
-grep -R "inviteCode" src
-grep -R "join code" src
-grep -R "Join Code" src
-grep -R "code" src/app src/components
-```
-
-2. Remove UI:
-
-* Code display
-* Code input
-* Join by code form
-
-3. Giữ UI:
-
-* QR code
-* Copy invite link button
-
-4. Đảm bảo invite link vẫn hoạt động:
-
-```txt
-/group/join?token=...
-```
-
-hoặc route hiện tại của project.
-
-5. Nếu backend hiện chỉ join bằng code, không xóa backend vội.
-
-   * Có thể giữ API cũ để tránh phá logic.
-   * Nhưng UI không dùng nó nữa.
-
-Acceptance:
-
-* Không còn thấy mã tham gia dạng text.
-* Không còn ô nhập mã tham gia.
-* QR còn hoạt động.
-* Copy invite link còn hoạt động.
-* Người dùng mới vẫn join được bằng link/QR.
-
----
-
-## Bug 6: Cache không đồng bộ sau khi profile update
-
-Nếu project đang dùng SWR/cache:
-
-* Sau khi update profile phải invalidate/update các key liên quan.
-
-Các key cần xem:
-
-```txt
-/api/me
-/api/groups
-/api/groups/[id]
-```
-
-Sau update profile:
+Sau update profile/reset:
 
 ```ts
-await mutate("/api/me");
-await mutate("/api/groups");
-await mutate(
-  (key) => typeof key === "string" && key.startsWith("/api/groups/")
-);
+mutate("/api/me");
+mutate("/api/groups");
+mutate((key) => typeof key === "string" && key.startsWith("/api/groups/"));
 ```
-
-Nếu có local client shell state thì cũng cần update currentUser ở shell.
 
 Mục tiêu:
 
-* Không cần reload.
-* Không cần logout/login.
-* Không cần vào group mới thấy avatar mới.
+* Header đổi ngay.
+* Profile đổi ngay.
+* Dashboard đổi ngay.
+* Group member list đổi ngay.
+* Bill/settlement hiển thị avatar/name mới nếu lấy từ group detail API.
 
 ---
 
-# Thứ tự ưu tiên sửa
-
-1. Fix profile save vào MongoDB và không bị Google overwrite sau login.
-2. Tạo/use `/api/me` làm single source cho current user.
-3. Đồng bộ cache sau update profile.
-4. Fix header/navbar/home/profile dùng current user mới.
-5. Fix input contrast.
-6. Remove join code UI, giữ QR + link.
-7. Chạy test/build.
-
----
-
-# Kiểm tra sau khi sửa
+# Test checklist
 
 Chạy:
 
@@ -396,49 +479,33 @@ npm run build
 
 Test thủ công:
 
-1. Login Google.
-2. Vào profile.
-3. Đổi tên.
-4. Đổi avatar.
-5. Save.
-6. Kiểm tra ngay:
-
-   * Profile hiển thị tên/avatar mới.
-   * Header/navbar avatar đổi.
-   * Dashboard/home đổi.
-   * Group member/avatar đổi.
-7. Reload trang.
-8. Kiểm tra tên/avatar vẫn còn.
-9. Logout.
-10. Login lại.
-11. Kiểm tra tên/avatar vẫn giữ custom value, không bị reset về Google.
-12. Test trên mobile viewport:
-
-* input profile
-* input add bill
-* input create group
-* các form còn lại
-
-13. Kiểm tra invite UI:
-
-* Không còn mã tham gia dạng text.
-* Không còn ô nhập mã tham gia.
-* QR còn.
-* Copy link còn.
-* Join bằng link/QR vẫn hoạt động.
+1. Login bằng Google.
+2. Google avatar GIF vẫn hiển thị.
+3. Upload avatar custom.
+4. Không còn lỗi `INVALID_IMAGE_OPTIMIZE_REQUEST`.
+5. Không còn request 400 từ `/_next/image?.../api/user/avatar`.
+6. Reload trang → avatar custom vẫn còn.
+7. Logout/login lại → avatar custom vẫn còn.
+8. Bấm khôi phục ảnh mặc định → quay lại Google avatar.
+9. Reload/logout/login → vẫn là Google avatar.
+10. Đổi tên custom → toàn app cập nhật.
+11. Khôi phục tên mặc định → quay lại Google name.
+12. Vào group → avatar/name đúng.
+13. Click cụm avatar thành viên góc phải → mở danh sách thành viên.
+14. Mobile view modal thành viên hoạt động tốt.
+15. Không còn lỗi màu/input nếu có đụng UI profile.
 
 ---
 
-# Báo cáo sau khi hoàn thành
+# Báo cáo sau khi làm xong
 
-Hãy báo lại:
+Báo lại:
 
-1. Đã sửa/thêm những file nào.
-2. Nguyên nhân tên/avatar bị mất sau login là gì.
-3. Current user source hiện tại là gì: session hay `/api/me`.
-4. Cách cache được cập nhật sau profile update.
-5. Các màn đã kiểm tra avatar/name sync.
-6. Các input/form đã sửa màu.
-7. Các phần join code UI đã xóa.
-8. QR/link invite còn hoạt động bằng route nào.
-9. Có rủi ro còn lại không.
+1. Đã sửa file nào.
+2. Lý do lỗi `INVALID_IMAGE_OPTIMIZE_REQUEST`.
+3. Avatar hiện dùng `<img>` hay `<Image unoptimized />`.
+4. User model hiện lưu google/custom name/avatar thế nào.
+5. Reset name/avatar hoạt động ra sao.
+6. Các SWR cache key được mutate sau profile update.
+7. Member list modal trong group nằm ở component nào.
+8. Kết quả test build.

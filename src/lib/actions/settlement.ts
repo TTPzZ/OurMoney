@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import connectDB from "@/lib/db";
 import Settlement from "@/models/Settlement";
 import { revalidatePath } from "next/cache";
+import { toPublicUser, USER_PUBLIC_SELECT, type PublicUserDocument } from "@/lib/current-user";
 
 export async function markAsPaid(groupId: string, to: string, amount: number) {
   const session = await auth();
@@ -60,9 +61,15 @@ export async function directConfirm(groupId: string, from: string, amount: numbe
 export async function getSettlementsByGroupId(groupId: string) {
   await connectDB();
   const settlements = await Settlement.find({ groupId })
-    .populate('from', 'name image')
-    .populate('to', 'name image')
+    .populate('from', USER_PUBLIC_SELECT)
+    .populate('to', USER_PUBLIC_SELECT)
     .lean();
   
-  return JSON.parse(JSON.stringify(settlements));
+  return JSON.parse(JSON.stringify(
+    settlements.map((settlement) => ({
+      ...settlement,
+      from: toPublicUser(settlement.from as unknown as PublicUserDocument),
+      to: toPublicUser(settlement.to as unknown as PublicUserDocument),
+    })),
+  ));
 }

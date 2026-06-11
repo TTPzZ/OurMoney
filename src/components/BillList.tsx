@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { formatDistanceToNow } from "date-fns";
+import Avatar from "@/components/Avatar";
 
 interface Bill {
   _id: string;
@@ -27,19 +27,7 @@ export default function BillList({ bills }: { bills: Bill[] }) {
         >
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 shrink-0">
-              {bill.paidBy.image ? (
-                <Image
-                  src={bill.paidBy.image}
-                  alt={bill.paidBy.name}
-                  width={40}
-                  height={40}
-                  className="object-cover"
-                />
-              ) : (
-                <div className="w-full h-full bg-gray-50 flex items-center justify-center text-xs font-bold text-gray-400">
-                  {bill.paidBy.name.charAt(0)}
-                </div>
-              )}
+              <Avatar src={bill.paidBy.image} name={bill.paidBy.name} size={40} />
             </div>
             <div>
               <h3 className="font-bold text-gray-900 leading-tight">
