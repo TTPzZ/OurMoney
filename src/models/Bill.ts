@@ -30,6 +30,9 @@ const BillSchema = new Schema<IBill>({
   createdAt: { type: Date, default: Date.now },
 });
 
+BillSchema.index({ groupId: 1, createdAt: -1 });
+BillSchema.index({ paidBy: 1 });
+
 const Bill = (mongoose.models && mongoose.models.Bill) || mongoose.model<IBill>('Bill', BillSchema);
 
 export default Bill;

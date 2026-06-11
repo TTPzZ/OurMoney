@@ -16,6 +16,8 @@ const GroupSchema = new Schema<IGroup>({
   createdAt: { type: Date, default: Date.now },
 });
 
+GroupSchema.index({ members: 1, createdAt: -1 });
+
 const Group = (mongoose.models && mongoose.models.Group) || mongoose.model<IGroup>('Group', GroupSchema);
 
 export default Group;

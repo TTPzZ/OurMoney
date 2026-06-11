@@ -1,6 +1,6 @@
-import { getGroupById, deleteGroup, leaveGroup } from "@/lib/actions/group";
-import { getBillsByGroupId } from "@/lib/actions/bill";
-import { getSettlementsByGroupId, markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
+import { deleteGroup, leaveGroup } from "@/lib/actions/group";
+import { getGroupByIdForUser, getBillsByGroupId, getSettlementsByGroupId } from "@/lib/queries";
+import { markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
 import { simplifyDebts, type Bill } from "@/lib/utils/debt";
 import GroupInviteQR from "@/components/GroupInviteQR";
 import Link from "next/link";
@@ -42,13 +42,17 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
   const session = await auth();
   if (!session?.user?.id) redirect("/");
 
-  const group = await getGroupById(id);
+  // Query group first to ensure user has access
+  const group = await getGroupByIdForUser(id, session.user.id);
   if (!group) notFound();
 
   const isCreator = group.createdBy === session.user.id;
 
-  const bills = await getBillsByGroupId(id) as IBillWithPayer[];
-  const settlements = await getSettlementsByGroupId(id) as ISettlement[];
+  // Use Promise.all to fetch bills and settlements concurrently
+  const [bills, settlements] = await Promise.all([
+    getBillsByGroupId(id),
+    getSettlementsByGroupId(id)
+  ]) as [IBillWithPayer[], ISettlement[]];
 
   const completedSettlements = settlements
     .filter(s => s.status === 'completed')

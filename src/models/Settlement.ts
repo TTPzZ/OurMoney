@@ -20,6 +20,9 @@ const SettlementSchema = new Schema<ISettlement>({
   completedAt: { type: Date },
 });
 
+SettlementSchema.index({ groupId: 1, status: 1 });
+SettlementSchema.index({ groupId: 1, from: 1, to: 1 });
+
 const Settlement = (mongoose.models && mongoose.models.Settlement) || mongoose.model<ISettlement>('Settlement', SettlementSchema);
 
 export default Settlement;

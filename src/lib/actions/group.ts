@@ -39,13 +39,22 @@ export async function getGroups() {
   return JSON.parse(JSON.stringify(groups));
 }
 
-export async function joinGroupByCode(inviteCode: string) {
+import mongoose from 'mongoose';
+
+export async function joinGroupByCode(code: string) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
 
   await connectDB();
 
-  const group = await Group.findOne({ inviteCode }).select("_id members");
+  let group;
+  
+  if (mongoose.Types.ObjectId.isValid(code)) {
+    group = await Group.findById(code).select("_id members");
+  } else {
+    group = await Group.findOne({ inviteCode: code }).select("_id members");
+  }
+  
   if (!group) throw new Error("Mã nhóm không tồn tại");
 
   const isMember = group.members.some((m: any) => m.toString() === session.user.id);

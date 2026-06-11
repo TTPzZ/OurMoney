@@ -1,33 +1,142 @@
-[MASTER ARCHITECTURE, BUGFIX & FEATURE UPGRADE TASK - PROJECT: OURMONEY]
-Hãy thực hiện đại tu toàn diện dự án Next.js 16 (Auth.js v5, Mongoose, MongoDB Atlas, Tailwind CSS) để sửa các lỗi hiện tại và bổ sung các tính năng nâng cao. Rà soát và cập nhật đồng loạt các file mã nguồn theo các yêu cầu nghiêm ngặt sau:
+Bạn hãy kiểm tra và tối ưu hiệu năng cho project Next.js OurMoney trong repo hiện tại.
 
-1. TỐI ƯU HÓA HIỆU NĂNG & DIỆT LỖI DELAY 2-3S (Crucial Performance Fix):
-- MONGODB CONNECTION POOL: Cập nhật file kết nối database (`src/lib/db.ts` hoặc tương đương). BẮT BUỘC triển khai cơ chế Global Cached Connection Pool cho Mongoose theo chuẩn Next.js Serverless (sử dụng global.mongoose để lưu conn và promise). Không được tạo lại kết nối mới ở mỗi request.
-- MONGODB LEAN QUERIES: Trong các hàm fetch dữ liệu ở Server Component, thêm `.lean()` vào sau các câu lệnh tìm kiếm của Mongoose (Ví dụ: `Group.findById(id).lean()`) để bỏ qua việc khởi tạo Mongoose Document nặng nề, tăng tốc độ truy vấn.
-- NEXT.JS STREAMING: Tạo ngay file `loading.tsx` bên trong thư mục `src/app/dashboard/` và `src/app/group/[id]/`. Giao diện file loading sử dụng hiệu ứng Khung xương giả lập (Skeleton Loader) với hiệu ứng `animate-pulse` của Tailwind CSS để kích hoạt React Suspense, giúp chuyển trang ngay lập tức trong 0.1s thay vì bị đơ màn hình chờ server.
-- LOADING STATES TRÊN UI: Tại các nút bấm tương tác (Tạo nhóm, tham gia nhóm, nút xác nhận tiền), sử dụng `useTransition` (`isPending`) hoặc thuộc tính disabled khi form đang submit để lập tức đổi chữ thành "Đang xử lý..." khi người dùng click, ngăn chặn bấm vô tội vạ.
+Mục tiêu chính:
 
-2. SỬA LỖI VỠ AVATAR & TÍNH NĂNG TẢI ẢNH LOCAL (Image Patterns & Base64 Upload):
-- NEXT CONFIG: Cập nhật thuộc tính `images.remotePatterns` trong file `next.config.js` (hoặc `next.config.mjs`) để cho phép hiển thị ảnh từ các máy chủ: `lh3.googleusercontent.com` và `ui-avatars.com`.
-- LOCAL AVATAR UPLOAD: Tại trang Profile, bổ sung nút "Tải ảnh từ máy lên". Sử dụng FileReader ở Client để mã hóa file ảnh thành chuỗi `Base64 string`. Viết Server Action nhận chuỗi Base64 này và lưu trực tiếp vào trường `image` của User trong MongoDB.
-- FALLBACK AVATAR: Cập nhật toàn bộ các thẻ hiển thị Avatar để nhận diện tốt cả link URL Google lẫn chuỗi mã hóa Base64. Nếu ảnh lỗi hoặc trống, tự động fallback về ảnh chữ cái của `ui-avatars.com`.
+* Giảm thời gian chuyển trang/tab/nút từ khoảng 2–3 giây xuống nhanh nhất có thể.
+* Không rewrite toàn bộ app.
+* Không làm hỏng flow đăng nhập Google/NextAuth.
+* Không thay đổi UI lớn nếu không cần thiết.
+* Sửa theo từng bước nhỏ, dễ review.
 
-3. HỆ THỐNG AUTH & ĐỒNG BỘ SESSION (Logout & Dynamic Profile Sync):
-- LOGOUT BUTTON: Thêm nút Đăng xuất sử dụng hàm `signOut` từ Auth.js tại Sidebar/Navbar, redirect về trang `/`.
-- NEXTAUTH SESSION CALLBACKS: Cấu hình file `src/auth.ts`, tại các hàm callback `jwt` và `session`, bổ sung logic để cập nhật dữ liệu mới nhất (Name và Avatar) từ Database hoặc từ trigger `update`.
-- CLIENT SIDE SESSION REFRESH: Tại trang chỉnh sửa hồ sơ, sau khi Server Action cập nhật Tên/Avatar mới vào MongoDB thành công, hãy gọi hàm `update()` từ hook `useSession()` phía client để đồng bộ lại Cookie Session ngay lập tức (sửa lỗi ngoài trang chủ vẫn hiện tên mặc định cũ).
+Bối cảnh kỹ thuật:
+Project đang dùng Next.js, NextAuth, Mongoose/MongoDB. Hiện tại app có dấu hiệu bị chậm vì mỗi lần chuyển trang hoặc đổi tab đang gọi `auth()`, `connectDB()` và query MongoDB lặp lại nhiều lần.
 
-4. QUẢN LÝ NHÓM, RỜI NHÓM & VÁ LỖI THAM GIA BẰNG MÃ (Group Security & Join Fix):
-- PHÂN QUYỀN XÓA NHÓM: Chỉ hiển thị nút "Xóa nhóm" và cho phép thực thi Server Action xóa nhóm đối với tài khoản là TRƯỞNG NHÓM (creatorId của nhóm trùng với userId hiện tại).
-- TÍNH NĂNG RỜI NHÓM: Bổ sung nút "Rời nhóm" cho thành viên. Trước khi thực hiện xóa userId khỏi mảng members của Group, hệ thống BẮT BUỘC phải tính toán tổng số dư (balance) của thành viên đó trong nhóm. Nếu số tiền họ "Cần trả" (Nợ người khác) hoặc "Nhận về" (Người khác nợ mình) KHÁC 0, phải chặn lại và hiển thị thông báo: "Bạn phải hoàn thành tất cả khoản nợ hoặc tiền nhận trước khi rời nhóm!".
-- FIX JOIN CODE LOGIC: Sửa Server Action `joinGroup`. Khi người dùng nhập mã, làm sạch chuỗi bằng `.trim()`. Nếu chuỗi nhập vào khớp định dạng 24 ký tự ObjectId thì tìm nhóm theo `_id`, nếu là chuỗi ngắn thì tìm nhóm theo trường `joinCode` (hoặc `inviteCode`) trong DB. Không được ép mã ngắn vào trường `_id` gây ra lỗi "Mã nhóm không tồn tại".
-- DISPLAY CODE: Trên giao diện chi tiết nhóm, hiển thị chuỗi Mã tham gia nhóm này nằm NGAY PHÍA DƯỚI của mã QR Code. Tại Dashboard, thêm ô nhập mã nhóm và nút "Tham gia bằng mã".
+Các việc cần kiểm tra và sửa theo thứ tự ưu tiên:
 
-5. CHUẨN HÓA LUỒNG QUYẾT TOÁN THÔNG MINH & TIMESTAMP HÓA ĐƠN (Advanced Settlement & Time Logging):
-- PHÂN LOẠI MÀU UI: Tại màn hình quyết toán của Nhóm, số tiền MÌNH CẦN TRẢ người khác bắt buộc hiển thị màu ĐỎ (Dạng âm: -50.000đ). Số tiền NGƯỜI KHÁC NỢ MÌNH hiển thị màu XANH LÁ (Dạng dương: +100.000đ). Hiển thị rõ số lượng người đang còn thiếu tiền mình (Ví dụ: "Có X người đang thiếu tiền bạn").
-- QUY TRÌNH XÁC NHẬN TRẢ TIỀN 2 BƯỚC:
-  + NGƯỜI TRẢ TIỀN (Con nợ): Khi bấm nút "Đã trả", hệ thống chuyển trạng thái khoản nợ thành "Chờ xác nhận", tự động lưu mốc ngày giờ bấm (createdAt/updatedAt) và hiển thị nhỏ phía dưới (Ví dụ: "Đã trả lúc 14:30 - 11/06"). Số tiền nợ trên hệ thống CHƯA ĐƯỢC biến mất.
-  + NGƯỜI NHẬN TIỀN (Chủ nợ): Khi họ bấm nút "Xác nhận đã nhận tiền", trạng thái đổi thành "Đã hoàn thành", lúc này số nợ mới chính thức trừ sạch về 0. Người nhận tiền có quyền ĐƠN PHƯƠNG bấm nút này bất cứ lúc nào để xóa nợ cho người kia mà không cần người trả phải gửi yêu cầu trước.
-- THỜI GIAN TẠO HÓA ĐƠN: Cập nhật Schema hóa đơn để lưu chính xác trường `createdAt` (bao gồm ngày, giờ, phút). Hiển thị mốc thời gian này nhỏ phía dưới tên hóa đơn ở danh sách hoạt động nhóm để dễ tham chiếu (Ví dụ: "Tạo lúc 09:15 - 11/06/2026").
+1. Tối ưu `src/auth.ts`
 
-Hãy tiến hành quét toàn bộ project, tối ưu cấu trúc mã nguồn một cách sạch sẽ, scannable và ghi đè các file ngay lập tức!
+* Kiểm tra callback `session()`.
+* Nếu `session()` đang gọi `connectDB()` hoặc `User.findOne()` mỗi lần lấy session thì hãy sửa lại.
+* Chỉ query/create/update user trong callback `jwt()` khi login hoặc khi thật sự cần.
+* Lưu `dbUser._id` vào token, ví dụ `token.userId`.
+* Trong `session()` chỉ gán:
+  `session.user.id = token.userId`
+* Tuyệt đối tránh query MongoDB trong `session()` cho mỗi request.
+
+2. Giảm gọi `auth()` lặp lại
+
+* Kiểm tra các page như:
+
+  * `src/app/dashboard/page.tsx`
+  * `src/app/group/[id]/page.tsx`
+  * `src/app/dashboard/group/[id]/page.tsx`
+  * các file trong `src/lib/actions/`
+* Nếu page đã gọi `auth()` rồi nhưng function bên dưới lại gọi `auth()` tiếp chỉ để lấy userId thì hãy tách function query riêng.
+* Tạo các query/helper kiểu:
+
+  * `getGroupsForUser(userId)`
+  * `getGroupByIdForUser(groupId, userId)`
+  * `getBillsByGroupId(groupId)`
+  * `getSettlementsByGroupId(groupId)`
+* Các query helper này nhận `userId`/`groupId` từ page, không tự gọi `auth()`.
+* Nhưng các server action dùng để mutate dữ liệu như create/update/delete/join group vẫn phải tự gọi `auth()` để đảm bảo bảo mật.
+
+3. Tối ưu page group detail
+
+* Nếu đang gọi các hàm lấy group, bills, settlements theo kiểu tuần tự thì đổi sang `Promise.all()` với những query độc lập.
+* Đảm bảo chỉ `connectDB()` một lần trong page hoặc helper chính.
+* Ví dụ logic mong muốn:
+
+  * gọi `auth()` một lần
+  * `connectDB()` một lần
+  * query group để check user có quyền truy cập
+  * sau đó query bills và settlements bằng `Promise.all()`
+
+4. Kiểm tra tab trong group/dashboard
+
+* Nếu tab Bills/Settle Up/Overview đang đổi bằng URL search param như `?tab=bills` hoặc route navigation thì đổi sang client component dùng `useState`.
+* Dữ liệu nên fetch một lần từ server page rồi truyền xuống client component.
+* Khi đổi tab chỉ đổi UI ở client, không được refetch/re-render server page nếu không cần.
+
+5. Thêm index cho MongoDB models
+   Kiểm tra các model như `Group`, `Bill`, `Settlement`, `User`.
+   Nếu chưa có index phù hợp thì thêm:
+
+Trong Group:
+
+```ts
+GroupSchema.index({ members: 1, createdAt: -1 });
+GroupSchema.index({ inviteCode: 1 }, { unique: true });
+```
+
+Trong Bill:
+
+```ts
+BillSchema.index({ groupId: 1, createdAt: -1 });
+BillSchema.index({ paidBy: 1 });
+```
+
+Trong Settlement:
+
+```ts
+SettlementSchema.index({ groupId: 1, status: 1 });
+SettlementSchema.index({ groupId: 1, from: 1, to: 1 });
+```
+
+6. Kiểm tra `revalidatePath`
+
+* Tìm các chỗ đang gọi `revalidatePath()`.
+* Tránh revalidate quá rộng như toàn dashboard/layout nếu không cần.
+* Sau khi create/update/delete bill/group/settlement, chỉ revalidate đúng route cần thiết.
+* Không được gọi revalidate dư làm cho khi user quay lại trang cũ bị fetch lại toàn bộ.
+
+7. Kiểm tra navigation
+
+* Tìm các chỗ dùng:
+
+  * `window.location.href`
+  * `location.assign`
+  * `<a href="/...">` cho route nội bộ
+* Nếu có thì đổi sang:
+
+  * `Link` của Next.js
+  * hoặc `router.push()`
+* Với route nội bộ, không được làm full page reload.
+
+8. Kiểm tra duplicate route
+
+* Repo đang có vẻ có cả `/group/[id]` và `/dashboard/group/[id]`.
+* Kiểm tra xem có bị trùng logic không.
+* Nếu có thể, chuẩn hóa về một route chính để tránh rối cache/navigation.
+* Không xóa route nếu chưa chắc, nhưng hãy báo rõ route nào đang được dùng chính.
+
+9. Sau khi sửa
+
+* Chạy:
+
+```bash
+npm run lint
+npm run build
+```
+
+* Nếu có lỗi TypeScript hoặc lint thì sửa.
+* Không bỏ qua lỗi bằng `any` trừ khi thật sự cần.
+* Không sửa lan man ngoài phạm vi performance.
+
+10. Kết quả cần trả về
+    Sau khi hoàn thành, hãy báo lại:
+
+* Đã sửa những file nào.
+* Nguyên nhân chậm chính là gì.
+* Đã giảm được bao nhiêu lần gọi `auth()`/MongoDB ở các page chính.
+* Có thay đổi nào cần migrate/index trên MongoDB Atlas không.
+* Có rủi ro nào cần test lại không.
+
+Acceptance criteria:
+
+* Đăng nhập Google vẫn hoạt động.
+* Dashboard load được group.
+* Vào group detail vẫn thấy bills/settlements đúng.
+* Đổi tab trong group gần như instant, không chờ 2–3 giây.
+* Bấm back quay lại trang trước không bị loading lâu bất thường.
+* Build production thành công.

@@ -1,5 +1,5 @@
 import { auth } from "@/auth";
-import { getGroups } from "@/lib/actions/group";
+import { getGroupsForUser } from "@/lib/queries";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import JoinGroupForm from "@/components/JoinGroupForm";
 import Avatar from "@/components/Avatar";
@@ -14,7 +14,8 @@ interface IGroupListItem {
 
 export default async function DashboardPage() {
   const session = await auth();
-  const groups = await getGroups() as IGroupListItem[];
+  if (!session?.user?.id) return null;
+  const groups = await getGroupsForUser(session.user.id) as IGroupListItem[];
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center p-6 pb-24">
