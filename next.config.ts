@@ -5,11 +5,7 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'platform-lookaside.fbsbx.com',
-      },
-      {
-        protocol: 'https',
-        hostname: 'facebook.com',
+        hostname: 'lh3.googleusercontent.com',
       },
       {
         protocol: 'https',

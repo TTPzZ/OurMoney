@@ -2,9 +2,9 @@ import { auth } from "@/auth";
 import { getGroups } from "@/lib/actions/group";
 import CreateGroupModal from "@/components/CreateGroupModal";
 import JoinGroupForm from "@/components/JoinGroupForm";
+import Avatar from "@/components/Avatar";
 import Link from "next/link";
 import { Users, ChevronRight, PlusCircle } from "lucide-react";
-import Image from "next/image";
 
 interface IGroupListItem {
   _id: string;
@@ -25,19 +25,9 @@ export default async function DashboardPage() {
           <p className="text-gray-500 font-medium tracking-tight">Xin chào, {session?.user?.name?.split(' ')[0]}! 👋</p>
         </div>
         <Link href="/profile" className="relative active:scale-90 transition-transform">
-          {session?.user?.image ? (
-            <Image
-              src={session.user.image}
-              alt="Profile"
-              width={48}
-              height={48}
-              className="rounded-full border-2 border-white shadow-lg"
-            />
-          ) : (
-            <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center border-2 border-white shadow-lg text-indigo-600 font-bold">
-              {session?.user?.name?.charAt(0)}
-            </div>
-          )}
+          <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-lg bg-gray-200">
+            <Avatar src={session?.user?.image} name={session?.user?.name || "U"} size={48} />
+          </div>
           <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></div>
         </Link>
       </div>

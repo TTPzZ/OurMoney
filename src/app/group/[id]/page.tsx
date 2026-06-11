@@ -5,7 +5,7 @@ import { simplifyDebts, type Bill } from "@/lib/utils/debt";
 import GroupInviteQR from "@/components/GroupInviteQR";
 import Link from "next/link";
 import { ChevronLeft, Plus, Receipt, ArrowRight, Landmark, Trash2, CheckCircle2, Clock, LogOut, User as UserIcon } from "lucide-react";
-import Image from "next/image";
+import Avatar from "@/components/Avatar";
 import { notFound, redirect } from "next/navigation";
 import { auth } from "@/auth";
 import ActionButton from "@/components/ActionButton";
@@ -119,13 +119,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
           <div className="flex -space-x-2">
             {group.members.slice(0, 3).map((member: IMember) => (
               <div key={member._id} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-gray-200">
-                {member.image ? (
-                  <Image src={member.image} alt={member.name} width={32} height={32} />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-gray-400">
-                    {member.name.charAt(0)}
-                  </div>
-                )}
+                <Avatar src={member.image} name={member.name} size={32} />
               </div>
             ))}
           </div>
@@ -172,13 +166,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
                   <div key={`owe-${idx}`} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border">
-                        {toMember?.image ? (
-                          <Image src={toMember.image} alt={toMember.name} width={40} height={40} />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-400">
-                            {toMember?.name.charAt(0)}
-                          </div>
-                        )}
+                        <Avatar src={toMember?.image} name={toMember?.name || "User"} size={40} />
                       </div>
                       <div>
                         <p className="text-sm font-bold text-gray-900">Bạn nợ <span className="text-indigo-600">{toMember?.name.split(' ')[0]}</span></p>
@@ -213,13 +201,7 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
                   <div key={`receive-${idx}`} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border">
-                        {fromMember?.image ? (
-                          <Image src={fromMember.image} alt={fromMember.name} width={40} height={40} />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-xs font-bold text-gray-400">
-                            {fromMember?.name.charAt(0)}
-                          </div>
-                        )}
+                        <Avatar src={fromMember?.image} name={fromMember?.name || "User"} size={40} />
                       </div>
                       <div>
                         <p className="text-sm font-bold text-gray-900"><span className="text-indigo-600">{fromMember?.name.split(' ')[0]}</span> nợ bạn</p>

@@ -50,19 +50,27 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       }
       return true;
     },
-    async jwt({ token, account, profile }) {
+    async jwt({ token, account, profile, trigger, session }) {
       if (account && profile && account.provider === "google") {
         token.sub = profile.sub as string;
       }
+      
+      if (trigger === "update" && session) {
+        token.name = session.name;
+        token.picture = session.image;
+      }
+      
       return token;
     },
     async session({ session, token }) {
       if (session.user && token.sub) {
         try {
           await connectDB();
-          const dbUser = await User.findOne({ googleId: token.sub });
+          const dbUser = (await User.findOne({ googleId: token.sub }).lean()) as any;
           if (dbUser) {
             session.user.id = dbUser._id.toString();
+            session.user.name = dbUser.name as string;
+            session.user.image = dbUser.image as string;
           }
         } catch (error) {
           console.error("Error fetching session user from DB:", error);

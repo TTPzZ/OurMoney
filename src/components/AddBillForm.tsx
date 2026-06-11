@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { ChevronLeft, Receipt, Check, Users, CreditCard, Sparkles } from "lucide-react";
 import { createBill } from "@/lib/actions/bill";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
+import Avatar from "@/components/Avatar";
 import Link from "next/link";
 
 interface Member {
@@ -294,13 +294,7 @@ export default function AddBillForm({
                               isSelected ? "border-indigo-600 opacity-100 scale-110 shadow-sm" : "border-transparent opacity-40 grayscale"
                             }`}
                           >
-                            {member.image ? (
-                              <Image src={member.image} alt={member.name} width={40} height={40} className="object-cover w-full h-full" />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-gray-200 text-xs font-bold text-gray-600">
-                                {member.name.charAt(0)}
-                              </div>
-                            )}
+                            <Avatar src={member.image} name={member.name} size={40} />
                           </button>
                         );
                       })}
@@ -330,13 +324,7 @@ export default function AddBillForm({
                 }`}
               >
                 <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200">
-                  {member.image ? (
-                    <Image src={member.image} alt={member.name} width={24} height={24} className="object-cover w-full h-full" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-200 text-[10px] font-bold text-gray-600">
-                      {member.name.charAt(0)}
-                    </div>
-                  )}
+                  <Avatar src={member.image} name={member.name} size={24} />
                 </div>
                 <span className="text-sm font-bold">{member.name.split(' ')[0]}</span>
               </button>
