@@ -5,6 +5,8 @@ import { ChevronLeft, LogOut } from "lucide-react";
 import ProfileClient from "./ProfileClient";
 import { SessionProvider } from "next-auth/react";
 
+export const preferredRegion = "sin1";
+
 export default async function ProfilePage() {
   const session = await auth();
   if (!session?.user) redirect("/");

@@ -37,11 +37,19 @@ interface ISettlement {
   completedAt?: string;
 }
 
+export const preferredRegion = "sin1";
+
 export default async function GroupDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  console.time("[group] total");
   const { id } = await params;
+  
+  console.time("[group] auth");
   const session = await auth();
+  console.timeEnd("[group] auth");
+  
   if (!session?.user?.id) redirect("/");
 
+  console.time("[group] fetch");
   // Query group first to ensure user has access
   const group = await getGroupByIdForUser(id, session.user.id);
   if (!group) notFound();
@@ -53,6 +61,9 @@ export default async function GroupDetailPage({ params }: { params: Promise<{ id
     getBillsByGroupId(id),
     getSettlementsByGroupId(id)
   ]) as [IBillWithPayer[], ISettlement[]];
+  console.timeEnd("[group] fetch");
+
+  console.time("[group] render");
 
   const completedSettlements = settlements
     .filter(s => s.status === 'completed')

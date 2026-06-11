@@ -1,142 +1,322 @@
-Bạn hãy kiểm tra và tối ưu hiệu năng cho project Next.js OurMoney trong repo hiện tại.
+# Nhiệm vụ: Tối ưu hiệu năng route Group trong dự án OurMoney
 
-Mục tiêu chính:
+## Bối cảnh
 
-* Giảm thời gian chuyển trang/tab/nút từ khoảng 2–3 giây xuống nhanh nhất có thể.
-* Không rewrite toàn bộ app.
-* Không làm hỏng flow đăng nhập Google/NextAuth.
-* Không thay đổi UI lớn nếu không cần thiết.
-* Sửa theo từng bước nhỏ, dễ review.
+Project là ứng dụng Next.js App Router chạy trên Vercel, sử dụng NextAuth và MongoDB (Mongoose).
 
-Bối cảnh kỹ thuật:
-Project đang dùng Next.js, NextAuth, Mongoose/MongoDB. Hiện tại app có dấu hiệu bị chậm vì mỗi lần chuyển trang hoặc đổi tab đang gọi `auth()`, `connectDB()` và query MongoDB lặp lại nhiều lần.
+Hiện tượng:
 
-Các việc cần kiểm tra và sửa theo thứ tự ưu tiên:
+* Người dùng ở Việt Nam.
+* Khi click vào `/group/[id]`, lần đầu mất khoảng 2–3 giây.
+* Những lần sau giảm xuống khoảng 1–1.5 giây.
+* Sau nhiều lần truy cập, request RSC chỉ còn khoảng 1–2KB và gần như tức thì.
 
-1. Tối ưu `src/auth.ts`
+Kết quả debug đã có:
 
-* Kiểm tra callback `session()`.
-* Nếu `session()` đang gọi `connectDB()` hoặc `User.findOne()` mỗi lần lấy session thì hãy sửa lại.
-* Chỉ query/create/update user trong callback `jwt()` khi login hoặc khi thật sự cần.
-* Lưu `dbUser._id` vào token, ví dụ `token.userId`.
-* Trong `session()` chỉ gán:
-  `session.user.id = token.userId`
-* Tuyệt đối tránh query MongoDB trong `session()` cho mỗi request.
+### Network
 
-2. Giảm gọi `auth()` lặp lại
+Request:
 
-* Kiểm tra các page như:
+```txt
+/group/[id]?_rsc=...
+```
 
-  * `src/app/dashboard/page.tsx`
-  * `src/app/group/[id]/page.tsx`
-  * `src/app/dashboard/group/[id]/page.tsx`
-  * các file trong `src/lib/actions/`
-* Nếu page đã gọi `auth()` rồi nhưng function bên dưới lại gọi `auth()` tiếp chỉ để lấy userId thì hãy tách function query riêng.
-* Tạo các query/helper kiểu:
+Thông số:
 
-  * `getGroupsForUser(userId)`
-  * `getGroupByIdForUser(groupId, userId)`
-  * `getBillsByGroupId(groupId)`
-  * `getSettlementsByGroupId(groupId)`
-* Các query helper này nhận `userId`/`groupId` từ page, không tự gọi `auth()`.
-* Nhưng các server action dùng để mutate dữ liệu như create/update/delete/join group vẫn phải tự gọi `auth()` để đảm bảo bảo mật.
+```txt
+Waiting for server response ≈ 400ms
+Content Download ≈ 3s (lần đầu)
+```
 
-3. Tối ưu page group detail
+Payload lần đầu:
 
-* Nếu đang gọi các hàm lấy group, bills, settlements theo kiểu tuần tự thì đổi sang `Promise.all()` với những query độc lập.
-* Đảm bảo chỉ `connectDB()` một lần trong page hoặc helper chính.
-* Ví dụ logic mong muốn:
+```txt
+~124KB
+```
 
-  * gọi `auth()` một lần
-  * `connectDB()` một lần
-  * query group để check user có quyền truy cập
-  * sau đó query bills và settlements bằng `Promise.all()`
+Sau đó:
 
-4. Kiểm tra tab trong group/dashboard
+```txt
+~1.5KB
+```
 
-* Nếu tab Bills/Settle Up/Overview đang đổi bằng URL search param như `?tab=bills` hoặc route navigation thì đổi sang client component dùng `useState`.
-* Dữ liệu nên fetch một lần từ server page rồi truyền xuống client component.
-* Khi đổi tab chỉ đổi UI ở client, không được refetch/re-render server page nếu không cần.
+### Vercel Function Logs
 
-5. Thêm index cho MongoDB models
-   Kiểm tra các model như `Group`, `Bill`, `Settlement`, `User`.
-   Nếu chưa có index phù hợp thì thêm:
+Middleware:
 
-Trong Group:
+```txt
+Execution Duration ≈ 11ms
+```
+
+Route:
+
+```txt
+/group/[id]
+Execution Duration ≈ 966ms
+```
+
+Region:
+
+```txt
+Received in Hong Kong (hkg1)
+Routed to Washington, D.C., USA (iad1)
+```
+
+Không có external API calls.
+
+---
+
+# Mục tiêu
+
+Giảm thời gian mở Group xuống mức tốt nhất có thể.
+
+Mục tiêu mong muốn:
+
+```txt
+Lần đầu < 1 giây
+Lần sau < 500ms
+```
+
+Không thay đổi lớn về UI/UX.
+
+---
+
+# Các việc cần thực hiện
+
+## 1. Chuyển Function Region gần Việt Nam
+
+Kiểm tra App Router route:
+
+```txt
+/group/[id]
+/dashboard
+/group/[id]/add-bill
+/profile
+```
+
+Thêm region preference phù hợp:
+
+Ví dụ:
 
 ```ts
-GroupSchema.index({ members: 1, createdAt: -1 });
-GroupSchema.index({ inviteCode: 1 }, { unique: true });
+export const preferredRegion = "sin1";
 ```
 
-Trong Bill:
+hoặc region phù hợp với vị trí MongoDB Atlas.
+
+Mục tiêu:
+
+* Tránh chạy function ở Washington D.C.
+* Giảm RTT cho người dùng Việt Nam.
+
+---
+
+## 2. Log chi tiết thời gian trong Group Page
+
+Trong:
+
+```txt
+src/app/group/[id]/page.tsx
+```
+
+thêm log:
 
 ```ts
-BillSchema.index({ groupId: 1, createdAt: -1 });
-BillSchema.index({ paidBy: 1 });
+console.time("[group] total");
+
+console.time("[group] auth");
+...
+console.timeEnd("[group] auth");
+
+console.time("[group] fetch");
+...
+console.timeEnd("[group] fetch");
+
+console.time("[group] render");
+...
+console.timeEnd("[group] render");
+
+console.timeEnd("[group] total");
 ```
 
-Trong Settlement:
+Deploy và kiểm tra Vercel Runtime Logs.
+
+Mục tiêu:
+Xác định chính xác bước nào chiếm nhiều thời gian nhất.
+
+---
+
+## 3. Kiểm tra connectDB()
+
+Đảm bảo MongoDB connection được cache đúng.
+
+Yêu cầu:
+
+* Không reconnect mỗi request.
+* Chỉ tạo connection một lần.
+* Tái sử dụng connection cho các request sau.
+
+Nếu chưa có global cache thì sửa.
+
+---
+
+## 4. Tối ưu query MongoDB
+
+Kiểm tra:
+
+```txt
+Group
+Bill
+Settlement
+User
+```
+
+Thực hiện:
+
+### Group
+
+Chỉ select field cần thiết.
+
+### Bill
+
+Chỉ select field cần dùng trong UI.
+
+Nếu chưa có pagination:
 
 ```ts
-SettlementSchema.index({ groupId: 1, status: 1 });
-SettlementSchema.index({ groupId: 1, from: 1, to: 1 });
+.limit(50)
 ```
 
-6. Kiểm tra `revalidatePath`
+hoặc giá trị phù hợp.
 
-* Tìm các chỗ đang gọi `revalidatePath()`.
-* Tránh revalidate quá rộng như toàn dashboard/layout nếu không cần.
-* Sau khi create/update/delete bill/group/settlement, chỉ revalidate đúng route cần thiết.
-* Không được gọi revalidate dư làm cho khi user quay lại trang cũ bị fetch lại toàn bộ.
+### Settlement
 
-7. Kiểm tra navigation
+Chỉ lấy dữ liệu cần thiết.
 
-* Tìm các chỗ dùng:
+### Populate
 
-  * `window.location.href`
-  * `location.assign`
-  * `<a href="/...">` cho route nội bộ
-* Nếu có thì đổi sang:
+Không populate toàn bộ User.
 
-  * `Link` của Next.js
-  * hoặc `router.push()`
-* Với route nội bộ, không được làm full page reload.
+Ví dụ:
 
-8. Kiểm tra duplicate route
-
-* Repo đang có vẻ có cả `/group/[id]` và `/dashboard/group/[id]`.
-* Kiểm tra xem có bị trùng logic không.
-* Nếu có thể, chuẩn hóa về một route chính để tránh rối cache/navigation.
-* Không xóa route nếu chưa chắc, nhưng hãy báo rõ route nào đang được dùng chính.
-
-9. Sau khi sửa
-
-* Chạy:
-
-```bash
-npm run lint
-npm run build
+```ts
+.populate("paidBy", "name image")
 ```
 
-* Nếu có lỗi TypeScript hoặc lint thì sửa.
-* Không bỏ qua lỗi bằng `any` trừ khi thật sự cần.
-* Không sửa lan man ngoài phạm vi performance.
+Không lấy:
 
-10. Kết quả cần trả về
-    Sau khi hoàn thành, hãy báo lại:
+```txt
+email
+googleId
+__v
+updatedAt
+...
+```
 
-* Đã sửa những file nào.
-* Nguyên nhân chậm chính là gì.
-* Đã giảm được bao nhiêu lần gọi `auth()`/MongoDB ở các page chính.
-* Có thay đổi nào cần migrate/index trên MongoDB Atlas không.
-* Có rủi ro nào cần test lại không.
+---
 
-Acceptance criteria:
+## 5. Kiểm tra auth()
 
-* Đăng nhập Google vẫn hoạt động.
-* Dashboard load được group.
-* Vào group detail vẫn thấy bills/settlements đúng.
-* Đổi tab trong group gần như instant, không chờ 2–3 giây.
-* Bấm back quay lại trang trước không bị loading lâu bất thường.
-* Build production thành công.
+Tìm tất cả:
+
+```txt
+auth()
+```
+
+Mục tiêu:
+
+* Không gọi auth lặp lại nhiều lần trong cùng một request.
+* Nếu page đã có session thì truyền userId xuống helper/query.
+
+Server Actions vẫn phải verify auth riêng.
+
+---
+
+## 6. Kiểm tra router.refresh()
+
+Search toàn bộ project:
+
+```txt
+router.refresh(
+router.prefetch(
+revalidatePath(
+```
+
+Kiểm tra xem có chỗ nào gây refresh thừa không.
+
+Đặc biệt:
+
+* useEffect tự refresh.
+* refresh sau navigation không cần thiết.
+
+---
+
+## 7. Kiểm tra duplicate routes
+
+Hiện tại có khả năng tồn tại:
+
+```txt
+/ group/[id]
+/ dashboard/group/[id]
+```
+
+Đánh giá:
+
+* Có thực sự cần cả hai không?
+* Có gây request thừa không?
+
+Nếu có thể, chuẩn hóa.
+
+---
+
+## 8. Đo lại hiệu năng
+
+Sau khi sửa:
+
+Kiểm tra lại bằng DevTools:
+
+Route:
+
+```txt
+/group/[id]?_rsc=...
+```
+
+Ghi nhận:
+
+```txt
+TTFB
+Content Download
+Payload Size
+```
+
+Kiểm tra Vercel:
+
+```txt
+Middleware Duration
+Function Duration
+Region
+```
+
+---
+
+# Báo cáo cuối cùng cần trả về
+
+1. Những file đã thay đổi.
+2. Region cuối cùng được sử dụng.
+3. Kết quả log thời gian từng bước.
+4. Những nguyên nhân gây chậm được tìm thấy.
+5. Hiệu năng trước và sau khi sửa.
+6. Có cần migrate/index MongoDB hay không.
+7. Các rủi ro cần test lại.
+
+---
+
+# Điều kiện hoàn thành
+
+* Đăng nhập Google hoạt động bình thường.
+* Dashboard hoạt động bình thường.
+* Group hiển thị đúng dữ liệu.
+* Add Bill vẫn hoạt động.
+* Không xuất hiện lỗi runtime.
+* Lần đầu mở Group nhanh hơn đáng kể.
+* Các lần truy cập tiếp theo gần như tức thì.

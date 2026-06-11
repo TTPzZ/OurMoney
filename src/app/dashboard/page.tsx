@@ -12,6 +12,8 @@ interface IGroupListItem {
   members: string[];
 }
 
+export const preferredRegion = "sin1";
+
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) return null;
