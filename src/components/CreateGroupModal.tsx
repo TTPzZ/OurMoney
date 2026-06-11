@@ -4,12 +4,14 @@ import { useState } from "react";
 import { Plus, X } from "lucide-react";
 import { createGroup } from "@/lib/actions/group";
 import { useRouter } from "next/navigation";
+import { useSWRConfig } from "swr";
 
 export default function CreateGroupModal() {
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [isPending, setIsPending] = useState(false);
   const router = useRouter();
+  const { mutate } = useSWRConfig();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -19,6 +21,7 @@ export default function CreateGroupModal() {
     try {
       const result = await createGroup(name);
       if (result.success) {
+        mutate("/api/groups");
         setIsOpen(false);
         setName("");
         router.push(`/group/${result.groupId}`);

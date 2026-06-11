@@ -1,322 +1,553 @@
-# Nhiệm vụ: Tối ưu hiệu năng route Group trong dự án OurMoney
+# Nhiệm vụ: Tối ưu UX điều hướng bằng cache + background revalidation cho OurMoney
 
-## Bối cảnh
+## Bối cảnh dự án
 
-Project là ứng dụng Next.js App Router chạy trên Vercel, sử dụng NextAuth và MongoDB (Mongoose).
+Dự án: **OurMoney**
+Stack hiện tại:
 
-Hiện tượng:
+* Next.js App Router
+* NextAuth / Google Login
+* MongoDB + Mongoose
+* Deploy trên Vercel
 
-* Người dùng ở Việt Nam.
-* Khi click vào `/group/[id]`, lần đầu mất khoảng 2–3 giây.
-* Những lần sau giảm xuống khoảng 1–1.5 giây.
-* Sau nhiều lần truy cập, request RSC chỉ còn khoảng 1–2KB và gần như tức thì.
+Hiện trạng:
 
-Kết quả debug đã có:
-
-### Network
-
-Request:
+* Sau khi tối ưu region/cold start, lần đầu mở group đã đỡ chậm hơn.
+* Tuy nhiên khi người dùng chuyển giữa Dashboard và Group, UI vẫn có cảm giác chậm.
+* DevTools cho thấy một số request RSC như:
 
 ```txt
 /group/[id]?_rsc=...
+/dashboard?_rsc=...
 ```
 
-Thông số:
+có thông số khoảng:
 
 ```txt
-Waiting for server response ≈ 400ms
-Content Download ≈ 3s (lần đầu)
+Waiting for server response: 300–400ms
+Content Download: ~900ms
+Size: khoảng 1.6KB ở các lần sau
 ```
 
-Payload lần đầu:
-
-```txt
-~124KB
-```
-
-Sau đó:
-
-```txt
-~1.5KB
-```
-
-### Vercel Function Logs
-
-Middleware:
-
-```txt
-Execution Duration ≈ 11ms
-```
-
-Route:
-
-```txt
-/group/[id]
-Execution Duration ≈ 966ms
-```
-
-Region:
-
-```txt
-Received in Hong Kong (hkg1)
-Routed to Washington, D.C., USA (iad1)
-```
-
-Không có external API calls.
+Vì payload rất nhỏ nhưng vẫn cảm giác chờ, vấn đề chính không còn là payload lớn, mà là app vẫn phụ thuộc quá nhiều vào server navigation/RSC request cho mỗi lần chuyển màn hình.
 
 ---
 
 # Mục tiêu
 
-Giảm thời gian mở Group xuống mức tốt nhất có thể.
-
-Mục tiêu mong muốn:
+Triển khai cơ chế:
 
 ```txt
-Lần đầu < 1 giây
-Lần sau < 500ms
+Cache data → hiển thị ngay → fetch lại ở background → nếu có dữ liệu mới thì tự cập nhật UI
 ```
 
-Không thay đổi lớn về UI/UX.
+Không dùng realtime/websocket ở giai đoạn này.
+
+Mục tiêu UX:
+
+* Sau login, dashboard load xong thì âm thầm prefetch một số group.
+* Khi user click vào group, nếu có cache thì hiển thị gần như tức thì.
+* Sau khi vào group, app tự fetch dữ liệu mới ở background.
+* Nếu dữ liệu mới khác cache thì cập nhật UI luôn.
+* Không bắt user reload trang.
+* Không bắt user bấm ra ngoài rồi vào lại để thấy dữ liệu mới.
+* Không rewrite toàn bộ app.
 
 ---
 
-# Các việc cần thực hiện
+# Yêu cầu kỹ thuật
 
-## 1. Chuyển Function Region gần Việt Nam
+Ưu tiên dùng **SWR** vì nhẹ và dễ tích hợp.
 
-Kiểm tra App Router route:
+Nếu project đã có TanStack Query thì dùng TanStack Query cũng được, nhưng không tự ý thêm cả hai thư viện cùng lúc.
 
-```txt
-/group/[id]
-/dashboard
-/group/[id]/add-bill
-/profile
+Nếu chưa có SWR thì cài:
+
+```bash
+npm install swr
 ```
-
-Thêm region preference phù hợp:
-
-Ví dụ:
-
-```ts
-export const preferredRegion = "sin1";
-```
-
-hoặc region phù hợp với vị trí MongoDB Atlas.
-
-Mục tiêu:
-
-* Tránh chạy function ở Washington D.C.
-* Giảm RTT cho người dùng Việt Nam.
 
 ---
 
-## 2. Log chi tiết thời gian trong Group Page
+# Phạm vi cần làm
 
-Trong:
+## 1. Tạo API endpoint cho Dashboard group list
+
+Tạo hoặc kiểm tra endpoint:
 
 ```txt
-src/app/group/[id]/page.tsx
+GET /api/groups
 ```
 
-thêm log:
-
-```ts
-console.time("[group] total");
-
-console.time("[group] auth");
-...
-console.timeEnd("[group] auth");
-
-console.time("[group] fetch");
-...
-console.timeEnd("[group] fetch");
-
-console.time("[group] render");
-...
-console.timeEnd("[group] render");
-
-console.timeEnd("[group] total");
-```
-
-Deploy và kiểm tra Vercel Runtime Logs.
-
-Mục tiêu:
-Xác định chính xác bước nào chiếm nhiều thời gian nhất.
-
----
-
-## 3. Kiểm tra connectDB()
-
-Đảm bảo MongoDB connection được cache đúng.
+Endpoint này trả về danh sách group của user hiện tại.
 
 Yêu cầu:
 
-* Không reconnect mỗi request.
-* Chỉ tạo connection một lần.
-* Tái sử dụng connection cho các request sau.
+* Verify auth bằng NextAuth.
+* Nếu chưa đăng nhập thì trả 401.
+* Chỉ trả group mà user là member.
+* Chỉ select field cần thiết.
+* Không trả dữ liệu thừa.
 
-Nếu chưa có global cache thì sửa.
+Dữ liệu gợi ý:
+
+```ts
+{
+  groups: [
+    {
+      _id: string,
+      name: string,
+      membersCount: number,
+      updatedAt?: string,
+      createdAt?: string
+    }
+  ],
+  version?: string
+}
+```
+
+Không trả về:
+
+* googleId
+* email của member nếu không cần
+* __v
+* token/secret
+* object user đầy đủ
 
 ---
 
-## 4. Tối ưu query MongoDB
+## 2. Tạo API endpoint cho Group detail
 
-Kiểm tra:
+Tạo hoặc kiểm tra endpoint:
 
 ```txt
-Group
-Bill
-Settlement
-User
+GET /api/groups/[id]
 ```
 
-Thực hiện:
+Endpoint này trả dữ liệu cần cho trang group detail.
 
-### Group
+Yêu cầu:
 
-Chỉ select field cần thiết.
+* Verify auth.
+* Check user hiện tại có thuộc group không.
+* Nếu không có quyền thì trả 403 hoặc 404.
+* Chỉ select field cần cho UI.
+* Không populate User đầy đủ.
+* Có `.lean()` cho query Mongoose.
 
-### Bill
-
-Chỉ select field cần dùng trong UI.
-
-Nếu chưa có pagination:
+Dữ liệu trả về gợi ý:
 
 ```ts
-.limit(50)
+{
+  group: {
+    _id: string,
+    name: string,
+    members: [
+      {
+        _id: string,
+        name: string,
+        image?: string
+      }
+    ],
+    createdAt?: string,
+    updatedAt?: string
+  },
+  bills: [
+    {
+      _id: string,
+      title: string,
+      amount: number,
+      paidBy: {
+        _id: string,
+        name: string,
+        image?: string
+      },
+      splitBetween: ...,
+      createdAt: string,
+      updatedAt?: string
+    }
+  ],
+  settlements: [
+    {
+      _id: string,
+      from: {
+        _id: string,
+        name: string,
+        image?: string
+      },
+      to: {
+        _id: string,
+        name: string,
+        image?: string
+      },
+      amount: number,
+      status: string,
+      createdAt: string,
+      updatedAt?: string
+    }
+  ],
+  summary?: ...,
+  version: string
+}
 ```
 
-hoặc giá trị phù hợp.
+`version` có thể là timestamp mới nhất từ group/bills/settlements, ví dụ max `updatedAt`.
 
-### Settlement
+Mục đích của `version`:
 
-Chỉ lấy dữ liệu cần thiết.
+* Dễ biết dữ liệu đã thay đổi chưa.
+* Giúp debug/cache sau này.
 
-### Populate
+---
 
-Không populate toàn bộ User.
+## 3. Tạo fetcher dùng chung
+
+Tạo file, ví dụ:
+
+```txt
+src/lib/fetcher.ts
+```
+
+Nội dung:
+
+```ts
+export async function fetcher<T = unknown>(url: string): Promise<T> {
+  const res = await fetch(url, {
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    const message = await res.text().catch(() => "");
+    throw new Error(message || `Failed to fetch ${url}`);
+  }
+
+  return res.json();
+}
+```
+
+---
+
+## 4. Tạo SWR Provider
+
+Nếu app đã có file providers thì thêm vào đó.
 
 Ví dụ:
 
-```ts
-.populate("paidBy", "name image")
+```tsx
+"use client";
+
+import { SWRConfig } from "swr";
+
+export function Providers({ children }: { children: React.ReactNode }) {
+  return (
+    <SWRConfig
+      value={{
+        revalidateOnFocus: true,
+        revalidateIfStale: true,
+        dedupingInterval: 5000,
+        keepPreviousData: true,
+        shouldRetryOnError: false,
+      }}
+    >
+      {children}
+    </SWRConfig>
+  );
+}
 ```
 
-Không lấy:
-
-```txt
-email
-googleId
-__v
-updatedAt
-...
-```
+Nếu đã có provider khác như ThemeProvider/SessionProvider thì bọc SWRConfig vào cùng, không phá cấu trúc hiện tại.
 
 ---
 
-## 5. Kiểm tra auth()
+## 5. Sửa Dashboard để dùng cache
 
-Tìm tất cả:
+Dashboard hiện tại có thể vẫn là server page.
 
-```txt
-auth()
+Yêu cầu:
+
+* Server page vẫn được phép check auth.
+* Có thể fetch initial groups từ server.
+* Truyền `initialGroupsData` xuống client component.
+* Client component dùng SWR với `fallbackData`.
+
+Ví dụ logic:
+
+```tsx
+const { data, isLoading, isValidating, mutate } = useSWR(
+  "/api/groups",
+  fetcher,
+  {
+    fallbackData: initialGroupsData,
+    revalidateOnMount: true,
+    revalidateOnFocus: true,
+  }
+);
 ```
 
-Mục tiêu:
+Khi quay lại dashboard:
 
-* Không gọi auth lặp lại nhiều lần trong cùng một request.
-* Nếu page đã có session thì truyền userId xuống helper/query.
-
-Server Actions vẫn phải verify auth riêng.
+* Hiển thị cache ngay.
+* Background fetch lại.
+* Nếu có group mới/thay đổi thì UI cập nhật.
 
 ---
 
-## 6. Kiểm tra router.refresh()
+## 6. Prefetch group detail sau khi login/dashboard load xong
+
+Trong Dashboard client component:
+
+* Sau khi có danh sách groups, prefetch tối đa 3–5 group gần nhất.
+* Không prefetch toàn bộ nếu user có nhiều group.
+* Tránh spam request.
+
+Ví dụ:
+
+```tsx
+import { useSWRConfig } from "swr";
+import { fetcher } from "@/lib/fetcher";
+
+const { mutate } = useSWRConfig();
+
+useEffect(() => {
+  if (!groups?.length) return;
+
+  groups.slice(0, 5).forEach((group) => {
+    const key = `/api/groups/${group._id}`;
+
+    mutate(key, fetcher(key), {
+      revalidate: false,
+      populateCache: true,
+    });
+  });
+}, [groups, mutate]);
+```
+
+Nếu thấy cách này gây request ngay quá nhiều, chuyển sang prefetch khi hover group card:
+
+```tsx
+onMouseEnter={() => {
+  const key = `/api/groups/${group._id}`;
+
+  mutate(key, fetcher(key), {
+    revalidate: false,
+    populateCache: true,
+  });
+}}
+```
+
+Có thể kết hợp:
+
+* Auto prefetch 3 group mới nhất.
+* Hover thì prefetch group đó.
+
+---
+
+## 7. Sửa Group Detail để dùng cache + background revalidation
+
+Trang `/group/[id]`:
+
+* Server page vẫn check auth.
+* Có thể fetch initial group data.
+* Truyền `initialData` xuống `GroupClient`.
+* `GroupClient` dùng SWR.
+
+Ví dụ:
+
+```tsx
+const { data, error, isLoading, isValidating, mutate } = useSWR(
+  `/api/groups/${groupId}`,
+  fetcher,
+  {
+    fallbackData: initialData,
+    revalidateOnMount: true,
+    revalidateOnFocus: true,
+    dedupingInterval: 5000,
+  }
+);
+```
+
+Yêu cầu:
+
+* Nếu có `fallbackData`, render ngay.
+* Khi SWR fetch xong dữ liệu mới, UI tự cập nhật.
+* Nếu đang background fetch thì có thể hiện text/icon nhỏ:
+
+```txt
+Đang cập nhật...
+```
+
+Không làm loading full screen nếu đã có dữ liệu cache.
+
+---
+
+## 8. Không bắt user reload để thấy dữ liệu mới
+
+Nếu background fetch trả dữ liệu mới:
+
+* Cập nhật UI luôn.
+* Không yêu cầu user reload trang.
+* Không yêu cầu user thoát group rồi vào lại.
+
+Nếu cần tránh UI nhảy bất ngờ, có thể hiện toast nhỏ:
+
+```txt
+Dữ liệu đã được cập nhật
+```
+
+Nhưng không bắt buộc.
+
+---
+
+## 9. Sau mutation phải cập nhật cache đúng key
+
+Kiểm tra các action:
+
+* create group
+* join group
+* update group
+* delete group
+* create bill
+* update bill
+* delete bill
+* create settlement
+* update settlement
+
+Sau khi mutation thành công:
+
+* Update hoặc invalidate đúng SWR key.
+* Hạn chế dùng `router.refresh()` nếu không cần.
+* Không `revalidatePath()` quá rộng.
+
+Ví dụ sau khi tạo bill:
+
+```tsx
+await createBill(payload);
+
+mutate(`/api/groups/${groupId}`);
+mutate("/api/groups");
+```
+
+Nếu dễ làm optimistic UI thì có thể làm, nhưng không bắt buộc trong phase này.
+
+Phase này ưu tiên:
+
+* submit thành công
+* cache refresh đúng
+* UI cập nhật nhanh
+
+---
+
+## 10. Kiểm tra và giảm refresh thừa
 
 Search toàn bộ project:
 
-```txt
-router.refresh(
-router.prefetch(
-revalidatePath(
+```bash
+grep -R "router.refresh" src
+grep -R "revalidatePath" src
+grep -R "window.location" src
+grep -R "location.href" src
 ```
 
-Kiểm tra xem có chỗ nào gây refresh thừa không.
+Yêu cầu:
 
-Đặc biệt:
-
-* useEffect tự refresh.
-* refresh sau navigation không cần thiết.
+* Không gọi `router.refresh()` trong `useEffect`.
+* Không refresh ngay sau khi navigation nếu không cần.
+* Không dùng `window.location.href` cho route nội bộ.
+* Route nội bộ phải dùng `Link` hoặc `router.push`.
 
 ---
 
-## 7. Kiểm tra duplicate routes
+## 11. Loading UI
 
-Hiện tại có khả năng tồn tại:
+Nếu route vẫn cần server navigation:
+
+* Thêm loading skeleton nhẹ.
+* Không hiện màn hình trắng.
+
+Có thể thêm:
 
 ```txt
-/ group/[id]
-/ dashboard/group/[id]
+src/app/dashboard/loading.tsx
+src/app/group/[id]/loading.tsx
 ```
 
-Đánh giá:
+Nhưng lưu ý:
 
-* Có thực sự cần cả hai không?
-* Có gây request thừa không?
-
-Nếu có thể, chuẩn hóa.
+* Nếu đã có cache data trong client, ưu tiên render cache, không thay bằng full loading.
 
 ---
 
-## 8. Đo lại hiệu năng
+## 12. Kiểm tra bảo mật
 
-Sau khi sửa:
+Các API endpoint phải:
 
-Kiểm tra lại bằng DevTools:
+* Check user đã login.
+* Check quyền truy cập group.
+* Không để user A đọc group của user B bằng cách đổi URL.
+* Không trả field nhạy cảm.
 
-Route:
+---
 
-```txt
-/group/[id]?_rsc=...
+## 13. Đo hiệu năng sau khi sửa
+
+Sau khi hoàn thành, chạy:
+
+```bash
+npm run lint
+npm run build
 ```
+
+Sau đó deploy và test các flow:
+
+1. Login.
+2. Vào dashboard.
+3. Đợi 1–2 giây để prefetch.
+4. Click vào group.
+5. Back về dashboard.
+6. Vào lại group.
+7. Tạo bill mới.
+8. Kiểm tra group cập nhật đúng.
+9. Focus tab lại sau vài giây để xem SWR có refresh không.
 
 Ghi nhận:
 
-```txt
-TTFB
-Content Download
-Payload Size
-```
-
-Kiểm tra Vercel:
-
-```txt
-Middleware Duration
-Function Duration
-Region
-```
+* UI có hiện ngay từ cache không.
+* Có còn full loading không.
+* Có request spam không.
+* Network `_rsc` có còn làm UX bị chờ không.
+* API `/api/groups/[id]` có chạy background hợp lý không.
 
 ---
 
-# Báo cáo cuối cùng cần trả về
+# Acceptance Criteria
 
-1. Những file đã thay đổi.
-2. Region cuối cùng được sử dụng.
-3. Kết quả log thời gian từng bước.
-4. Những nguyên nhân gây chậm được tìm thấy.
-5. Hiệu năng trước và sau khi sửa.
-6. Có cần migrate/index MongoDB hay không.
-7. Các rủi ro cần test lại.
+Hoàn thành khi:
+
+* Login Google vẫn hoạt động.
+* Dashboard hiển thị group bình thường.
+* Dashboard dùng cache, quay lại không bị chờ rõ rệt.
+* Group detail nếu đã có cache thì hiển thị gần như tức thì.
+* Group detail tự background fetch dữ liệu mới.
+* Nếu dữ liệu mới khác cache thì UI cập nhật tự động.
+* Add bill xong dữ liệu group cập nhật đúng.
+* Không cần realtime/websocket.
+* Không cần reload trang để thấy dữ liệu mới.
+* Không spam request.
+* Không lộ dữ liệu user/group không thuộc quyền truy cập.
+* Build production thành công.
 
 ---
 
-# Điều kiện hoàn thành
+# Báo cáo sau khi làm xong
 
-* Đăng nhập Google hoạt động bình thường.
-* Dashboard hoạt động bình thường.
-* Group hiển thị đúng dữ liệu.
-* Add Bill vẫn hoạt động.
-* Không xuất hiện lỗi runtime.
-* Lần đầu mở Group nhanh hơn đáng kể.
-* Các lần truy cập tiếp theo gần như tức thì.
+Hãy báo lại:
+
+1. Đã sửa/thêm những file nào.
+2. Dùng SWR hay TanStack Query.
+3. Những SWR key/API key đang dùng.
+4. Cách dashboard prefetch group detail.
+5. Cách group detail background refresh.
+6. Cách cache được cập nhật sau khi tạo bill/group/settlement.
+7. Các chỗ đã loại bỏ `router.refresh()` hoặc `revalidatePath()` thừa.
+8. Kết quả test trước/sau.
+9. Rủi ro còn lại nếu có.

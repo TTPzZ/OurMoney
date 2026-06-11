@@ -6,6 +6,7 @@ import { createBill } from "@/lib/actions/bill";
 import { useRouter } from "next/navigation";
 import Avatar from "@/components/Avatar";
 import Link from "next/link";
+import { useSWRConfig } from "swr";
 
 interface Member {
   _id: string;
@@ -29,6 +30,7 @@ export default function AddBillForm({
   currentUserId: string;
 }) {
   const router = useRouter();
+  const { mutate } = useSWRConfig();
   const [description, setDescription] = useState("");
   const [totalAmount, setTotalAmount] = useState<number | "">("");
   const [paidBy, setPaidBy] = useState(currentUserId);
@@ -204,6 +206,8 @@ export default function AddBillForm({
         splits
       });
 
+      mutate(`/api/groups/${groupId}`);
+      mutate("/api/groups");
       router.push(`/group/${groupId}`);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : "Đã có lỗi xảy ra";

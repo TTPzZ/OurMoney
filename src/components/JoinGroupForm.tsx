@@ -4,11 +4,13 @@ import { useState, useTransition } from "react";
 import { joinGroupByCode } from "@/lib/actions/group";
 import { useRouter } from "next/navigation";
 import { UserPlus, Loader2 } from "lucide-react";
+import { useSWRConfig } from "swr";
 
 export default function JoinGroupForm() {
   const [code, setCode] = useState("");
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const { mutate } = useSWRConfig();
 
   const handleJoin = () => {
     if (!code.trim()) return;
@@ -17,6 +19,7 @@ export default function JoinGroupForm() {
       try {
         const result = await joinGroupByCode(code.trim());
         if (result.success) {
+          mutate("/api/groups");
           router.push(`/group/${result.groupId}`);
         }
       } catch (error: any) {
