@@ -7,6 +7,7 @@ import {
   USER_PUBLIC_SELECT,
   type PublicUserDocument,
 } from "./lib/current-user"
+import { GOOGLE_AUTHORIZATION_PARAMS } from "./lib/google-auth"
 import User from "./models/User"
 
 declare module "next-auth" {
@@ -22,6 +23,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,
       clientSecret: process.env.AUTH_GOOGLE_SECRET,
+      authorization: {
+        params: GOOGLE_AUTHORIZATION_PARAMS,
+      },
     }),
   ],
   callbacks: {
