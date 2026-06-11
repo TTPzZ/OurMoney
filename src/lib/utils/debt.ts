@@ -15,18 +15,27 @@ export interface Bill {
   splits: Split[];
 }
 
+export interface CompletedSettlement {
+  from: string;
+  to: string;
+  amount: number;
+}
+
 /**
  * Minimum Cash Flow Algorithm (Greedy Approach)
  * Calculates the most efficient way to settle debts within a group.
  */
-export function simplifyDebts(bills: Bill[], memberIds: string[]): Transaction[] {
+export function simplifyDebts(
+  bills: Bill[], 
+  memberIds: string[], 
+  completedSettlements: CompletedSettlement[] = []
+): Transaction[] {
   const balances: Record<string, number> = {};
   
   // Initialize balances
   memberIds.forEach(id => balances[id] = 0);
 
-  // Calculate net balance for each member
-  // Balance = (Total Paid by User) - (Total User Owes)
+  // Calculate net balance for each member from bills
   bills.forEach(bill => {
     const payer = bill.paidBy.toString();
     if (balances[payer] !== undefined) {
@@ -39,6 +48,14 @@ export function simplifyDebts(bills: Bill[], memberIds: string[]): Transaction[]
         balances[debtor] -= split.amount;
       }
     });
+  });
+
+  // Adjust balances with completed settlements
+  completedSettlements.forEach(s => {
+    const from = s.from.toString();
+    const to = s.to.toString();
+    if (balances[from] !== undefined) balances[from] += s.amount;
+    if (balances[to] !== undefined) balances[to] -= s.amount;
   });
 
   // Separate members into net debtors and net creditors

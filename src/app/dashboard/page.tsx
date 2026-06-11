@@ -21,17 +21,24 @@ export default async function DashboardPage() {
       <div className="w-full max-w-md flex justify-between items-center mb-8 pt-4">
         <div>
           <h1 className="text-2xl font-black text-indigo-600">OurMoney</h1>
-          <p className="text-gray-500 font-medium">Xin chào, {session?.user?.name?.split(' ')[0]}!</p>
+          <p className="text-gray-500 font-medium tracking-tight">Xin chào, {session?.user?.name?.split(' ')[0]}! 👋</p>
         </div>
-        {session?.user?.image && (
-          <Image
-            src={session.user.image}
-            alt="Profile"
-            width={44}
-            height={44}
-            className="rounded-full border-2 border-white shadow-sm"
-          />
-        )}
+        <Link href="/profile" className="relative active:scale-90 transition-transform">
+          {session?.user?.image ? (
+            <Image
+              src={session.user.image}
+              alt="Profile"
+              width={48}
+              height={48}
+              className="rounded-full border-2 border-white shadow-lg"
+            />
+          ) : (
+            <div className="w-12 h-12 bg-indigo-100 rounded-full flex items-center justify-center border-2 border-white shadow-lg text-indigo-600 font-bold">
+              {session?.user?.name?.charAt(0)}
+            </div>
+          )}
+          <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></div>
+        </Link>
       </div>
 
       {/* Group List */}

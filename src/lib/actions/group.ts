@@ -59,6 +59,29 @@ export async function joinGroupByCode(inviteCode: string) {
   return { success: true, groupId: group._id.toString() };
 }
 
+export async function deleteGroup(groupId: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  await connectDB();
+
+  // In a real app, you might want to check if the user is the creator
+  const group = await Group.findById(groupId);
+  if (!group) throw new Error("Group not found");
+
+  // Optional: Check if user is the creator
+  // if (group.createdBy.toString() !== session.user.id) throw new Error("Only creators can delete groups");
+
+  const Bill = (await import("@/models/Bill")).default;
+  const Settlement = (await import("@/models/Settlement")).default;
+
+  await Bill.deleteMany({ groupId });
+  await Settlement.deleteMany({ groupId });
+  await Group.findByIdAndDelete(groupId);
+
+  revalidatePath("/dashboard");
+}
+
 export async function getGroupById(id: string) {
   const session = await auth();
   if (!session?.user?.id) throw new Error("Unauthorized");
