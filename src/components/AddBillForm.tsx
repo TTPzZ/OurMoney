@@ -7,6 +7,9 @@ import { useRouter } from "next/navigation";
 import Avatar from "@/components/Avatar";
 import Link from "next/link";
 import { useSWRConfig } from "swr";
+import Button from "@/components/ui/Button";
+import Card from "@/components/ui/Card";
+import Section from "@/components/ui/Section";
 
 interface Member {
   _id: string;
@@ -218,13 +221,13 @@ export default function AddBillForm({
   };
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32">
+    <main className="min-h-screen bg-slate-50 flex flex-col items-center p-4 pb-32">
       {/* Header */}
       <div className="w-full max-w-md flex justify-between items-center mb-6 pt-4">
-        <Link href={`/group/${groupId}`} className="p-2 bg-white rounded-xl shadow-sm border border-gray-100 text-gray-500">
+        <Link href={`/group/${groupId}`} className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 text-slate-500 active:scale-95 transition-transform">
           <ChevronLeft size={24} />
         </Link>
-        <h1 className="text-xl font-bold text-gray-900">Thêm hóa đơn</h1>
+        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Thêm hóa đơn</h1>
         <div className="w-10"></div>
       </div>
 
@@ -232,20 +235,20 @@ export default function AddBillForm({
         
         {/* Info Header with AI Button */}
         <div className="flex justify-between items-center px-1">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
+          <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <Receipt size={16} />
             Thông tin hóa đơn
           </h2>
-          <label className="flex items-center gap-2 bg-indigo-100 text-indigo-700 px-3 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-transform shadow-sm">
-            <Sparkles size={14} className={isScanning ? "animate-pulse" : ""} />
-            {isScanning ? "Đang quét..." : "Quét hóa đơn bằng AI ✨"}
+          <label className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-3 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-transform shadow-sm border border-indigo-100">
+            <Sparkles size={14} className={isScanning ? "animate-spin" : ""} />
+            {isScanning ? "Đang quét..." : "Quét hóa đơn AI ✨"}
             <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanBill} disabled={isScanning} />
           </label>
         </div>
 
         {/* Step 1: Info */}
-        <section className="bg-white rounded-3xl p-6 shadow-sm border border-gray-100 space-y-4">
-          <div className="flex items-center gap-3 border-b border-gray-50 pb-4">
+        <Card className="p-6 space-y-4">
+          <div className="flex items-center gap-3 border-b border-slate-50 pb-4">
             <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
               <Receipt size={20} />
             </div>
@@ -254,11 +257,11 @@ export default function AddBillForm({
               placeholder="Nội dung (ví dụ: Ăn trưa)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="flex-1 bg-white text-gray-900 border-none outline-none text-lg font-bold placeholder:text-gray-400 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
+              className="flex-1 bg-white text-slate-900 border-none outline-none text-lg font-bold placeholder:text-slate-400 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </div>
           <div className="flex items-center gap-3 pt-2">
-            <div className="w-10 h-10 bg-green-50 rounded-2xl flex items-center justify-center text-green-600 font-black">
+            <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 font-black">
               ₫
             </div>
             <input
@@ -266,27 +269,23 @@ export default function AddBillForm({
               placeholder="Tổng số tiền"
               value={totalAmount}
               onChange={(e) => setTotalAmount(e.target.value === "" ? "" : Number(e.target.value))}
-              className="flex-1 bg-white text-gray-900 border-none outline-none text-3xl font-black placeholder:text-gray-400 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
+              className="flex-1 bg-white text-slate-900 border-none outline-none text-3xl font-black placeholder:text-slate-400 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
             />
           </div>
-        </section>
+        </Card>
 
         {/* AI Line Items Section */}
         {ocrItems.length > 0 && (
-          <section className="space-y-3">
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-2">
-              <Sparkles size={16} />
-              Chi tiết món ăn (từ AI)
-            </h2>
+          <Section title="Chi tiết món ăn (từ AI)" icon={<Sparkles size={16} />}>
             <div className="space-y-3">
               {ocrItems.map((item, idx) => (
-                <div key={idx} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm space-y-3">
+                <Card key={idx} className="p-4 space-y-3">
                   <div className="flex justify-between items-start">
-                    <span className="font-bold text-gray-900 leading-tight flex-1 pr-4">{item.name}</span>
+                    <span className="font-bold text-slate-900 leading-tight flex-1 pr-4">{item.name}</span>
                     <span className="font-black text-indigo-600">₫{item.price.toLocaleString()}</span>
                   </div>
-                  <div className="pt-2 border-t border-gray-50">
-                    <p className="text-[10px] uppercase font-bold text-gray-400 mb-2 tracking-wider">Ai đã dùng món này?</p>
+                  <div className="pt-2 border-t border-slate-50">
+                    <p className="text-[10px] uppercase font-bold text-slate-400 mb-2 tracking-widest">Ai đã dùng món này?</p>
                     <div className="flex gap-2 overflow-x-auto no-scrollbar pb-1">
                       {members.map(member => {
                         const isSelected = item.selectedMembers.includes(member._id);
@@ -304,50 +303,44 @@ export default function AddBillForm({
                       })}
                     </div>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
-          </section>
+          </Section>
         )}
 
         {/* Step 2: Paid By */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-2">
-            <CreditCard size={16} />
-            Người trả tiền
-          </h2>
-          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+        <Section title="Người trả tiền" icon={<CreditCard size={16} />}>
+          <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar px-1">
             {members.map((member) => (
               <button
                 key={member._id}
                 onClick={() => setPaidBy(member._id)}
-                className={`flex items-center gap-2 px-4 py-3 rounded-2xl border transition-all shrink-0 ${
+                className={`flex items-center gap-2 px-4 py-3 rounded-2xl border transition-all shrink-0 active:scale-95 ${
                   paidBy === member._id 
                     ? "bg-indigo-600 border-indigo-600 text-white shadow-md" 
-                    : "bg-white border-gray-100 text-gray-600"
+                    : "bg-white border-slate-100 text-slate-600"
                 }`}
               >
-                <div className="w-6 h-6 rounded-full overflow-hidden bg-gray-200">
+                <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-200">
                   <Avatar src={member.image} name={member.name} size={24} />
                 </div>
                 <span className="text-sm font-bold">{member.name.split(' ')[0]}</span>
               </button>
             ))}
           </div>
-        </section>
+        </Section>
 
         {/* Step 3: Participants & Split */}
-        <section className="space-y-3">
-          <div className="flex justify-between items-center px-1">
-            <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest flex items-center gap-2">
-              <Users size={16} />
-              Cùng tham gia
-            </h2>
-            <div className="flex bg-gray-100 p-1 rounded-lg">
+        <Section 
+          title="Cùng tham gia" 
+          icon={<Users size={16} />}
+          action={
+            <div className="flex bg-slate-100 p-1 rounded-lg">
               <button
                 onClick={() => setSplitType("equal")}
                 className={`px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all ${
-                  splitType === "equal" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400"
+                  splitType === "equal" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400"
                 }`}
               >
                 Chia đều
@@ -355,15 +348,15 @@ export default function AddBillForm({
               <button
                 onClick={() => setSplitType("custom")}
                 className={`px-3 py-1 text-[10px] font-black uppercase rounded-md transition-all ${
-                  splitType === "custom" ? "bg-white text-indigo-600 shadow-sm" : "text-gray-400"
+                  splitType === "custom" ? "bg-white text-indigo-600 shadow-sm" : "text-slate-400"
                 }`}
               >
                 Tùy chỉnh
               </button>
             </div>
-          </div>
-
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden divide-y divide-gray-50">
+          }
+        >
+          <Card className="overflow-hidden divide-y divide-slate-50">
             {members.map((member) => {
               const isSelected = selectedParticipants.includes(member._id);
               return (
@@ -373,20 +366,20 @@ export default function AddBillForm({
                     className="flex items-center gap-3 flex-1 text-left"
                   >
                     <div className={`w-6 h-6 rounded-lg border-2 flex items-center justify-center transition-all ${
-                      isSelected ? "bg-indigo-600 border-indigo-600 text-white" : "border-gray-200"
+                      isSelected ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-200"
                     }`}>
                       {isSelected && <Check size={14} />}
                     </div>
-                    <span className={`font-bold text-sm ${isSelected ? "text-gray-900" : "text-gray-300"}`}>
+                    <span className={`font-bold text-sm ${isSelected ? "text-slate-900" : "text-slate-300"}`}>
                       {member.name}
                     </span>
                   </button>
 
                   {isSelected && (
                     <div className="flex items-center gap-1">
-                      <span className="text-[10px] font-bold text-gray-300">₫</span>
+                      <span className="text-[10px] font-bold text-slate-300">₫</span>
                       {splitType === "equal" ? (
-                        <span className="text-sm font-black text-gray-900">
+                        <span className="text-sm font-black text-slate-900">
                           {currentSplits[member._id]?.toLocaleString() || 0}
                         </span>
                       ) : (
@@ -395,7 +388,7 @@ export default function AddBillForm({
                           placeholder="0"
                           value={customAmounts[member._id] || ""}
                           onChange={(e) => handleCustomAmountChange(member._id, e.target.value)}
-                          className="w-24 text-right bg-white px-2 py-1 rounded-lg outline-none font-black text-indigo-600 placeholder:text-gray-400 text-sm border border-indigo-100 dark:bg-gray-900 dark:text-indigo-300 dark:placeholder:text-gray-500"
+                          className="w-24 text-right bg-white px-2 py-1 rounded-lg outline-none font-black text-indigo-600 placeholder:text-slate-400 text-sm border border-indigo-100 dark:bg-slate-950 dark:text-indigo-300 dark:placeholder:text-slate-500"
                         />
                       )}
                     </div>
@@ -403,30 +396,33 @@ export default function AddBillForm({
                 </div>
               );
             })}
-          </div>
+          </Card>
           
           {splitType === "custom" && (
             <div className="px-4 py-2 flex justify-between items-center">
-              <p className="text-xs font-bold text-gray-400">Đã chia: ₫{customTotal.toLocaleString()}</p>
-              <p className={`text-xs font-bold ${Math.abs(customTotal - Number(totalAmount)) < 10 ? "text-green-500" : "text-red-500"}`}>
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Đã chia: ₫{customTotal.toLocaleString()}</p>
+              <p className={`text-[10px] font-bold uppercase tracking-widest ${Math.abs(customTotal - Number(totalAmount)) < 10 ? "text-emerald-500" : "text-red-500"}`}>
                 Còn lại: ₫{(Number(totalAmount) - customTotal).toLocaleString()}
               </p>
             </div>
           )}
-        </section>
+        </Section>
 
         {error && <p className="text-red-500 text-xs font-bold text-center">{error}</p>}
       </div>
 
       {/* Fixed Bottom Action */}
       <div className="fixed bottom-8 w-full max-w-md px-6">
-        <button
+        <Button
           onClick={handleSubmit}
           disabled={!isValid || isPending}
-          className="w-full bg-indigo-600 text-white py-5 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
+          size="xl"
+          className="w-full shadow-2xl"
+          loading={isPending}
+          loadingText="Đang lưu..."
         >
-          {isPending ? "Đang lưu..." : "Xác nhận"}
-        </button>
+          Xác nhận
+        </Button>
       </div>
     </main>
   );

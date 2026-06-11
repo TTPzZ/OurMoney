@@ -10,6 +10,9 @@ import GroupMembersDialog from "@/components/GroupMembersDialog";
 import Link from "next/link";
 import { ChevronLeft, Plus, Receipt, Landmark, Trash2, CheckCircle2, Clock, LogOut } from "lucide-react";
 import Avatar from "@/components/Avatar";
+import Card from "@/components/ui/Card";
+import Button from "@/components/ui/Button";
+import Section from "@/components/ui/Section";
 import { useRouter } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
 import { deleteGroup, leaveGroup } from "@/lib/actions/group";
@@ -111,17 +114,17 @@ export default function GroupClient({
   const pendingSettlements = settlements.filter((s: Settlement) => s.status === 'pending');
 
   return (
-    <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4 pb-32 w-full">
+    <main className="min-h-screen bg-slate-50 flex flex-col items-center p-4 pb-32 w-full">
       {/* Header */}
       <div className="w-full max-w-md flex justify-between items-center mb-6 pt-4">
         <div className="flex items-center gap-3">
           <BackToDashboard onBackToDashboard={onBackToDashboard} />
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl font-bold text-gray-900 truncate max-w-[150px] leading-tight">{group.name}</h1>
+              <h1 className="text-xl font-bold text-slate-900 truncate max-w-[150px] leading-tight tracking-tight">{group.name}</h1>
               {isValidating && <div className="w-2 h-2 bg-indigo-400 rounded-full animate-pulse"></div>}
             </div>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+            <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
               {group.members.length} thành viên
             </p>
           </div>
@@ -159,16 +162,16 @@ export default function GroupClient({
           <button
             type="button"
             onClick={() => setShowMembers(true)}
-            className="flex -space-x-2 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            className="flex -space-x-2 rounded-full focus:outline-none focus:ring-2 focus:ring-indigo-500/20 active:scale-90 transition-transform"
             aria-label="Xem danh sách thành viên"
           >
             {group.members.slice(0, 3).map((member: GroupMember) => (
-              <div key={member._id} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-gray-200">
+              <div key={member._id} className="w-8 h-8 rounded-full border-2 border-white overflow-hidden bg-slate-200 shadow-sm">
                 <Avatar src={member.image} name={member.name} size={32} />
               </div>
             ))}
             {group.members.length > 3 && (
-              <span className="flex h-8 min-w-8 items-center justify-center rounded-full border-2 border-white bg-gray-100 px-1.5 text-[10px] font-black text-gray-500">
+              <span className="flex h-8 min-w-8 items-center justify-center rounded-full border-2 border-white bg-slate-100 px-1.5 text-[10px] font-black text-slate-500 shadow-sm">
                 +{group.members.length - 3}
               </span>
             )}
@@ -176,27 +179,22 @@ export default function GroupClient({
         </div>
       </div>
 
-      <div className="w-full max-w-md space-y-6">
+      <div className="w-full max-w-md space-y-8">
         {/* Advanced Settlement Summary */}
-        <section className="space-y-4">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-2">
-            <Landmark size={16} />
-            Quyết toán thông minh
-          </h2>
-          
+        <Section title="Quyết toán thông minh" icon={<Landmark size={16} />}>
           <div className="grid grid-cols-2 gap-3">
-            <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cần trả</p>
+            <Card className="p-4 bg-white">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cần trả</p>
               <p className="text-xl font-black text-red-500">
                 ₫{userOwes.reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
               </p>
-            </div>
-            <div className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Cần nhận</p>
-              <p className="text-xl font-black text-green-500">
+            </Card>
+            <Card className="p-4 bg-white">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">Cần nhận</p>
+              <p className="text-xl font-black text-emerald-500">
                 ₫{owedToUser.reduce((acc, t) => acc + t.amount, 0).toLocaleString()}
               </p>
-            </div>
+            </Card>
           </div>
 
           {owedToUser.length > 0 && (
@@ -213,18 +211,18 @@ export default function GroupClient({
                 const isPending = pendingSettlements.some((s: Settlement) => s.from._id === userId && s.to._id === t.to);
                 
                 return (
-                  <div key={`owe-${idx}`} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <Card key={`owe-${idx}`} className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 border border-white shadow-sm">
                         <Avatar src={toMember?.image} name={toMember?.name || "User"} size={40} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-gray-900">Bạn nợ <span className="text-indigo-600">{toMember?.name.split(' ')[0]}</span></p>
+                        <p className="text-sm font-bold text-slate-900">Bạn nợ <span className="text-indigo-600">{toMember?.name.split(' ')[0]}</span></p>
                         <p className="text-xs font-bold text-red-500">-₫{t.amount.toLocaleString()}</p>
                       </div>
                     </div>
                     {isPending ? (
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-amber-500 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100">
+                      <div className="flex items-center gap-1 text-[10px] font-bold text-amber-500 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 shadow-sm">
                         <Clock size={12} />
                         Đang chờ...
                       </div>
@@ -239,7 +237,7 @@ export default function GroupClient({
                         Đã trả
                       </ActionButton>
                     )}
-                  </div>
+                  </Card>
                 );
               })}
 
@@ -248,14 +246,14 @@ export default function GroupClient({
                 const pending = pendingSettlements.find((s: Settlement) => s.from._id === t.from && s.to._id === userId);
 
                 return (
-                  <div key={`receive-${idx}`} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+                  <Card key={`receive-${idx}`} className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full overflow-hidden bg-gray-100 border">
+                      <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 border border-white shadow-sm">
                         <Avatar src={fromMember?.image} name={fromMember?.name || "User"} size={40} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-gray-900"><span className="text-indigo-600">{fromMember?.name.split(' ')[0]}</span> nợ bạn</p>
-                        <p className="text-xs font-bold text-green-500">+₫{t.amount.toLocaleString()}</p>
+                        <p className="text-sm font-bold text-slate-900"><span className="text-indigo-600">{fromMember?.name.split(' ')[0]}</span> nợ bạn</p>
+                        <p className="text-xs font-bold text-emerald-500">+₫{t.amount.toLocaleString()}</p>
                       </div>
                     </div>
                     <div className="flex flex-col items-end gap-1">
@@ -287,54 +285,49 @@ export default function GroupClient({
                         </ActionButton>
                       )}
                     </div>
-                  </div>
+                  </Card>
                 );
               })}
             </div>
           ) : (
-            <div className="bg-green-50 p-6 rounded-3xl text-center border border-green-100">
-              <p className="text-green-700 font-bold text-sm">Nhóm hiện đang hòa vốn, không có nợ!</p>
-            </div>
+            <Card className="bg-emerald-50 p-6 text-center border-emerald-100">
+              <p className="text-emerald-700 font-bold text-sm">Nhóm hiện đang hòa vốn, không có nợ! ✨</p>
+            </Card>
           )}
-        </section>
+        </Section>
 
         {/* Recent Bills */}
-        <section className="space-y-3">
-          <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest px-1 flex items-center gap-2">
-            <Receipt size={16} />
-            Hóa đơn gần đây
-          </h2>
-
+        <Section title="Hóa đơn gần đây" icon={<Receipt size={16} />}>
           {bills.length > 0 ? (
             <div className="space-y-3">
               {bills.map((bill: BillWithPayer) => (
-                <div key={bill._id} className="bg-white p-4 rounded-3xl border border-gray-100 shadow-sm flex items-center justify-between">
+                <Card key={bill._id} className="p-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-400">
+                    <div className="w-10 h-10 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400">
                       <Receipt size={20} />
                     </div>
                     <div>
-                      <h4 className="font-bold text-gray-900 leading-tight">{bill.description}</h4>
-                      <div className="flex items-center gap-2 text-[10px] text-gray-400 font-bold uppercase tracking-wider">
+                      <h4 className="font-bold text-slate-900 leading-tight">{bill.description}</h4>
+                      <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
                         <span>{bill.paidBy.name.split(' ')[0]} trả</span>
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Clock size={10} />
-                          {new Date(bill.createdAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} - {new Date(bill.createdAt).toLocaleDateString('vi-VN')}
+                          {new Date(bill.createdAt).toLocaleDateString('vi-VN')}
                         </span>
                       </div>
                     </div>
                   </div>
-                  <span className="font-black text-gray-900">₫{bill.totalAmount.toLocaleString()}</span>
-                </div>
+                  <span className="font-black text-slate-900">₫{bill.totalAmount.toLocaleString()}</span>
+                </Card>
               ))}
             </div>
           ) : (
-            <div className="bg-white p-8 rounded-3xl text-center border-2 border-dashed border-gray-100">
-              <p className="text-gray-400 font-medium text-sm">Chưa có hóa đơn nào được tạo.</p>
+            <div className="bg-white p-8 rounded-3xl text-center border-2 border-dashed border-slate-100">
+              <p className="text-slate-400 font-medium text-sm">Chưa có hóa đơn nào được tạo.</p>
             </div>
           )}
-        </section>
+        </Section>
 
         {/* Invite Section */}
         <GroupInviteQR inviteCode={group.inviteCode} groupName={group.name} />
@@ -342,13 +335,14 @@ export default function GroupClient({
 
       {/* Fixed Bottom Action */}
       <div className="fixed bottom-8 w-full max-w-md px-6">
-        <Link
-          href={`/group/${groupId}/add-bill`}
-          className="flex items-center justify-center gap-2 bg-indigo-600 text-white py-5 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform"
+        <Button
+          size="xl"
+          className="w-full shadow-2xl"
+          leftIcon={<Plus size={24} />}
+          onClick={() => router.push(`/group/${groupId}/add-bill`)}
         >
-          <Plus size={24} />
           Thêm hóa đơn mới
-        </Link>
+        </Button>
       </div>
 
       <GroupMembersDialog

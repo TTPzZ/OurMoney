@@ -5,6 +5,9 @@ import { Plus, X } from "lucide-react";
 import { createGroup } from "@/lib/actions/group";
 import { useRouter } from "next/navigation";
 import { useSWRConfig } from "swr";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Card from "@/components/ui/Card";
 
 export default function CreateGroupModal({
   onOpenGroup,
@@ -44,46 +47,53 @@ export default function CreateGroupModal({
 
   return (
     <>
-      <button
+      <Button
         onClick={() => setIsOpen(true)}
-        className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-6 py-4 rounded-xl font-bold text-lg shadow-lg active:scale-95 transition-transform min-h-[56px] w-full max-w-sm"
+        size="lg"
+        className="shadow-xl min-h-[56px] w-full max-w-sm"
+        leftIcon={<Plus size={24} />}
       >
-        <Plus className="h-6 w-6" />
         Tạo nhóm mới
-      </button>
+      </Button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-          <div className="bg-white w-full max-w-sm rounded-3xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-xl font-bold text-gray-900">Tên nhóm của bạn</h2>
-              <button
-                onClick={() => setIsOpen(false)}
-                className="p-2 text-gray-400 hover:text-gray-600"
-              >
-                <X size={24} />
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <Card className="w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in duration-200 relative">
+            <button
+              onClick={() => setIsOpen(false)}
+              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 transition-colors"
+            >
+              <X size={24} />
+            </button>
+
+            <div className="space-y-6">
+              <div className="space-y-1">
+                <h3 className="text-xl font-black text-slate-900 tracking-tight">Tạo nhóm mới</h3>
+                <p className="text-sm text-slate-400 font-medium tracking-tight">Bắt đầu chia sẻ chi tiêu với bạn bè.</p>
+              </div>
+
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <Input
+                  label="Tên nhóm"
+                  placeholder='Ví dụ: "Ăn trưa", "Du lịch Đà Lạt"'
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={isPending}
+                  autoFocus
+                />
+
+                <Button
+                  type="submit"
+                  className="w-full"
+                  size="xl"
+                  loading={isPending}
+                  loadingText="Đang tạo..."
+                >
+                  Xác nhận
+                </Button>
+              </form>
             </div>
-
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <input
-                type="text"
-                placeholder='Ví dụ: "Ăn trưa", "Du lịch Đà Lạt"'
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                autoFocus
-                className="w-full px-4 py-4 rounded-xl border border-gray-200 bg-white text-gray-900 placeholder:text-gray-400 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 outline-none text-lg transition-all dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
-              />
-
-              <button
-                type="submit"
-                disabled={isPending || !name.trim()}
-                className="w-full bg-indigo-600 text-white py-4 rounded-xl font-bold text-lg shadow-md active:scale-95 transition-all disabled:opacity-50 disabled:active:scale-100"
-              >
-                {isPending ? "Đang tạo..." : "Xác nhận"}
-              </button>
-            </form>
-          </div>
+          </Card>
         </div>
       )}
     </>

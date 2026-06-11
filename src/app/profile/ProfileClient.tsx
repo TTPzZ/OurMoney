@@ -5,6 +5,9 @@ import { useSession } from "next-auth/react";
 import { RotateCcw, Save, Upload } from "lucide-react";
 import { useSWRConfig } from "swr";
 import Avatar from "@/components/Avatar";
+import Button from "@/components/ui/Button";
+import Input from "@/components/ui/Input";
+import Card from "@/components/ui/Card";
 import { getGroupDetailCachePredicate, type PublicUser } from "@/lib/current-user";
 import { useCurrentUser } from "@/lib/use-current-user";
 
@@ -139,7 +142,7 @@ export default function ProfileClient({
     <div className="w-full max-w-md space-y-8">
       <div className="flex flex-col items-center space-y-4">
         <div className="relative">
-          <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-xl bg-gray-200">
+          <div className="w-32 h-32 rounded-full overflow-hidden border-4 border-white shadow-2xl bg-slate-200">
             <Avatar src={image} name={name || "User"} size={128} />
           </div>
           <label className="absolute bottom-0 right-0 p-2 bg-indigo-600 rounded-full text-white border-2 border-white shadow-lg cursor-pointer active:scale-95 transition-transform">
@@ -154,59 +157,56 @@ export default function ProfileClient({
           </label>
         </div>
         <div className="text-center">
-          <h2 className="text-2xl font-black text-gray-900">{name}</h2>
-          <p className="text-sm font-medium text-gray-400">{user?.email}</p>
+          <h2 className="text-2xl font-black text-slate-900 tracking-tight">{name}</h2>
+          <p className="text-sm font-medium text-slate-400">{user?.email}</p>
         </div>
       </div>
 
       <div className="space-y-6">
-        <div className="space-y-4">
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-4">
-            <div className="space-y-1">
-              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-1">Tên hiển thị</label>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                disabled={isPending}
-                className="w-full bg-white text-gray-900 placeholder:text-gray-400 px-4 py-3 rounded-xl border border-gray-200 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 transition-colors font-bold disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder:text-gray-500"
-                placeholder="Nhập tên của bạn"
-              />
-            </div>
-          </div>
-        </div>
+        <Card className="p-6">
+          <Input
+            label="Tên hiển thị"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            disabled={isPending}
+            placeholder="Nhập tên của bạn"
+          />
+        </Card>
 
         <div className="space-y-3">
-          <button
-            type="button"
+          <Button
             onClick={handleUpdate}
-            disabled={isPending || !name.trim()}
-            className="w-full flex items-center justify-center gap-2 bg-indigo-600 text-white py-4 rounded-2xl font-bold text-lg shadow-xl active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100"
+            loading={isPending}
+            disabled={!name.trim()}
+            size="xl"
+            className="w-full"
+            leftIcon={<Save size={24} />}
           >
-            <Save size={24} />
-            {isPending ? "Đang lưu..." : "Lưu thay đổi"}
-          </button>
+            Lưu thay đổi
+          </Button>
+          
           {user?.customName && (
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={handleResetName}
               disabled={isPending}
-              className="w-full flex items-center justify-center gap-2 bg-white text-gray-600 py-3 rounded-2xl font-bold text-sm shadow-sm border border-gray-100 active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100"
+              className="w-full"
+              leftIcon={<RotateCcw size={18} />}
             >
-              <RotateCcw size={18} />
               Khôi phục tên mặc định
-            </button>
+            </Button>
           )}
+          
           {user?.customImage && (
-            <button
-              type="button"
+            <Button
+              variant="outline"
               onClick={handleResetImage}
               disabled={isPending}
-              className="w-full flex items-center justify-center gap-2 bg-white text-gray-600 py-3 rounded-2xl font-bold text-sm shadow-sm border border-gray-100 active:scale-95 transition-transform disabled:opacity-50 disabled:active:scale-100"
+              className="w-full"
+              leftIcon={<RotateCcw size={18} />}
             >
-              <RotateCcw size={18} />
               Khôi phục ảnh mặc định
-            </button>
+            </Button>
           )}
         </div>
       </div>

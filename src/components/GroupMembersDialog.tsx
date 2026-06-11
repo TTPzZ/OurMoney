@@ -66,6 +66,9 @@ export default function GroupMembersDialog({
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-gray-900">{member.name}</p>
+                {member.email && (
+                  <p className="truncate text-[10px] font-medium text-gray-400">{member.email}</p>
+                )}
               </div>
             </div>
           ))}
