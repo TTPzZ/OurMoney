@@ -224,10 +224,13 @@ export default function AddBillForm({
       });
 
       if (onSuccess) {
+        // If onSuccess is provided, we assume the parent (GroupClient) will handle the mutation
         await onSuccess();
         await waitForNextPaint();
       } else {
-        mutate(`/api/groups/${groupId}`);
+        // Fallback for standalone page, but even here we should be targeted
+        await mutate(`/api/groups/${groupId}`);
+        // Background refresh for other keys
         mutate("/api/groups");
         router.push(`/group/${groupId}`);
       }

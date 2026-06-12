@@ -116,10 +116,12 @@ export default function GroupClient({
   const pendingSettlements = settlements.filter((s: Settlement) => s.status === 'pending');
 
   const handleBillCreated = async () => {
-    await Promise.all([
-      mutate(),
-      mutateGlobal("/api/groups"),
-    ]);
+    // Only await the current group's mutation
+    await mutate();
+    
+    // Background refresh for other keys if needed, no await
+    mutateGlobal("/api/groups");
+    
     setShowAddBill(false);
   };
 

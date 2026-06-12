@@ -3,7 +3,6 @@
 import { auth } from "@/auth";
 import connectDB from "@/lib/db";
 import Bill from "@/models/Bill";
-import { revalidatePath } from "next/cache";
 import { toPublicUser, USER_PUBLIC_SELECT, type PublicUserDocument } from "@/lib/current-user";
 
 export async function createBill(
@@ -20,7 +19,7 @@ export async function createBill(
 
   await connectDB();
 
-  await Bill.create({
+  const bill = await Bill.create({
     groupId,
     description: data.description,
     totalAmount: data.totalAmount,
@@ -28,7 +27,9 @@ export async function createBill(
     splits: data.splits,
   });
 
-  revalidatePath(`/group/${groupId}`);
+  return JSON.parse(JSON.stringify(
+    await Bill.findById(bill._id).populate("paidBy", USER_PUBLIC_SELECT).lean()
+  ));
 }
 
 export async function getBillsByGroupId(groupId: string) {

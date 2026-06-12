@@ -3,7 +3,6 @@
 import { auth } from "@/auth";
 import connectDB from "@/lib/db";
 import Settlement from "@/models/Settlement";
-import { revalidatePath } from "next/cache";
 import { toPublicUser, USER_PUBLIC_SELECT, type PublicUserDocument } from "@/lib/current-user";
 
 export async function markAsPaid(groupId: string, to: string, amount: number) {
@@ -20,8 +19,6 @@ export async function markAsPaid(groupId: string, to: string, amount: number) {
     status: 'pending',
     paidAt: new Date()
   });
-
-  revalidatePath(`/group/${groupId}`);
 }
 
 export async function confirmReceived(groupId: string, settlementId: string) {
@@ -34,8 +31,6 @@ export async function confirmReceived(groupId: string, settlementId: string) {
     status: 'completed',
     completedAt: new Date()
   });
-
-  revalidatePath(`/group/${groupId}`);
 }
 
 export async function directConfirm(groupId: string, from: string, amount: number) {
@@ -54,8 +49,6 @@ export async function directConfirm(groupId: string, from: string, amount: numbe
     paidAt: new Date(),
     completedAt: new Date()
   });
-
-  revalidatePath(`/group/${groupId}`);
 }
 
 export async function getSettlementsByGroupId(groupId: string) {
