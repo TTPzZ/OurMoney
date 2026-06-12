@@ -34,7 +34,7 @@ export default function AddBillForm({
   groupId: string; 
   members: Member[]; 
   currentUserId: string;
-  onSuccess?: () => void;
+  onSuccess?: () => void | Promise<void>;
   onCancel?: () => void;
   isModal?: boolean;
 }) {
@@ -51,6 +51,14 @@ export default function AddBillForm({
 
   const [ocrItems, setOcrItems] = useState<OCRItem[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+
+  const waitForNextPaint = () => {
+    return new Promise<void>((resolve) => {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => resolve());
+      });
+    });
+  };
 
   // Auto-calculate equal splits
   const equalSplits = useMemo(() => {
@@ -215,12 +223,12 @@ export default function AddBillForm({
         splits
       });
 
-      mutate(`/api/groups/${groupId}`);
-      mutate("/api/groups");
-      
       if (onSuccess) {
-        onSuccess();
+        await onSuccess();
+        await waitForNextPaint();
       } else {
+        mutate(`/api/groups/${groupId}`);
+        mutate("/api/groups");
         router.push(`/group/${groupId}`);
       }
     } catch (err: unknown) {
@@ -436,7 +444,7 @@ export default function AddBillForm({
       </div>
 
       {/* Action Button */}
-      <div className={`${isModal ? "sticky bottom-0 -mx-4 mt-8 bg-white/80 backdrop-blur-md p-4 border-t border-slate-100" : "fixed bottom-8 w-full max-w-md px-6"} z-10`}>
+      <div className="mt-8 w-full z-10">
         <Button
           onClick={handleSubmit}
           disabled={!isValid || isPending}

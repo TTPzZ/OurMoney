@@ -15,6 +15,7 @@ interface AddBillModalProps {
   groupId: string;
   members: Member[];
   currentUserId: string;
+  onSuccess?: () => void | Promise<void>;
 }
 
 export default function AddBillModal({
@@ -23,6 +24,7 @@ export default function AddBillModal({
   groupId,
   members,
   currentUserId,
+  onSuccess,
 }: AddBillModalProps) {
   if (!open) return null;
 
@@ -49,7 +51,7 @@ export default function AddBillModal({
             groupId={groupId}
             members={members}
             currentUserId={currentUserId}
-            onSuccess={onClose}
+            onSuccess={onSuccess || onClose}
             onCancel={onClose}
             isModal={true}
           />

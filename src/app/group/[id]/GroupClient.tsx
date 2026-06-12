@@ -115,6 +115,14 @@ export default function GroupClient({
   const owedToUser = transactions.filter(t => t.to === userId);
   const pendingSettlements = settlements.filter((s: Settlement) => s.status === 'pending');
 
+  const handleBillCreated = async () => {
+    await Promise.all([
+      mutate(),
+      mutateGlobal("/api/groups"),
+    ]);
+    setShowAddBill(false);
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col items-center p-4 pb-32 w-full">
       {/* Header */}
@@ -353,6 +361,7 @@ export default function GroupClient({
         groupId={groupId}
         members={group.members}
         currentUserId={userId}
+        onSuccess={handleBillCreated}
       />
 
       <GroupMembersDialog
