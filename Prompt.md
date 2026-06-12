@@ -1,448 +1,235 @@
-# Nhiệm vụ: Chuyển Add Bill page thành modal trong Group, fix UI form thêm hóa đơn
+# Nhiệm vụ: Fix UI nút xác nhận Add Bill và gom thời gian refresh/cache vào loading state
 
 ## Bối cảnh
 
-Project: OurMoney
-Stack:
+Trong modal/form “Thêm hóa đơn” của OurMoney hiện có 2 vấn đề:
 
-* Next.js App Router
-* NextAuth
-* MongoDB/Mongoose
-* Tailwind CSS
-* Có page thêm hóa đơn hiện tại, route dạng `/group/[id]/add-bill` hoặc tương tự.
+1. Quanh nút “Xác nhận” đang có một khung/viền/nền trắng nhìn lệch với background.
+2. Khi bấm “Xác nhận”, app tạo bill xong có refresh/reload lại group/page. Việc này làm cache/preload bị mất hoặc chưa kịp nạp lại, khiến UX bị khựng sau khi submit.
 
-Hiện tại trang “Thêm hóa đơn” có nhiều vấn đề:
+Mục tiêu lần này là chữa cháy UX:
 
-* Khi bấm thêm hóa đơn phải load sang page mới.
-* Sau khi tạo hóa đơn lại phải quay về group và load lại.
-* UX bị chậm và không giống app.
-* UI form đang lỗi:
+* Khi user bấm “Xác nhận”, nút/modal phải ở trạng thái loading cho đến khi toàn bộ việc tạo bill + refresh/reload + preload/cache lại dữ liệu hoàn tất.
+* Sau khi mọi thứ xong mới đóng modal hoặc quay lại group.
+* Người dùng không thấy màn hình bị nhảy/khựng giữa chừng.
 
-  * input bị nền đen/chữ tối đè lên nhau
-  * placeholder khó đọc
-  * font size trong input quá lớn
-  * nút xác nhận bị đè lên nội dung bên dưới
-  * mobile/desktop đều có nguy cơ vỡ layout
-
-Mục tiêu lần này:
-
-* Bỏ flow mở trang riêng để thêm hóa đơn.
-* Chuyển form thêm hóa đơn thành modal/popup mở ngay trong trang group.
-* Không thay đổi logic tính tiền, chia tiền, người trả tiền, người tham gia.
-* Không thay đổi database schema.
-* Không thay đổi auth.
-* Không thêm tính năng mới ngoài việc chuyển UI từ page sang modal.
-* Fix UI form cho sạch, dễ dùng, không lỗi màu/font/spacing.
+Không thay đổi logic tính tiền, không thay đổi database schema, không thay đổi auth.
 
 ---
 
-# Mục tiêu UX mới
+# Phần 1: Fix viền/nền trắng quanh nút xác nhận
 
-Flow mong muốn:
+Hiện trạng:
 
-```txt
-User đang ở Group Detail
-→ bấm nút “Thêm hóa đơn”
-→ mở modal Add Bill ngay lập tức
-→ nhập nội dung/số tiền/người trả/người tham gia
-→ bấm “Tạo hóa đơn” hoặc “Xác nhận”
-→ submit loading trong modal
-→ tạo bill thành công
-→ đóng modal
-→ cập nhật danh sách hóa đơn trong group
-→ không chuyển page
-→ không reload toàn bộ route nếu không cần
-```
+* Nút “Xác nhận” màu tím nhưng bên ngoài có một khung trắng.
+* Nhìn giống button đang nằm trong một wrapper `bg-white` hoặc footer có nền trắng.
 
-Nếu có lỗi:
+Yêu cầu:
 
-```txt
-→ modal vẫn mở
-→ hiển thị lỗi trong modal
-→ không mất dữ liệu form nếu có thể
-```
+* Xóa hoặc chỉnh wrapper quanh nút để không còn mảng trắng lệch nền.
+* Nếu cần footer sticky thì background phải đồng bộ với modal/page.
+* Nút phải nằm gọn, không có khung trắng thừa.
 
----
-
-# Phạm vi được phép sửa
-
-Được sửa:
-
-* UI Add Bill form.
-* Component group detail để mở modal.
-* Cách gọi create bill từ modal.
-* Cache/mutate sau khi tạo bill nếu project đang dùng SWR.
-* Styling input/button/card/modal.
-* Có thể tách form hiện tại thành component dùng lại.
-
-Không được sửa:
-
-* Logic chia tiền.
-* Logic tính settlement.
-* MongoDB schema nếu không bắt buộc.
-* Auth/session.
-* Permission check.
-* API/server action create bill, trừ khi cần expose lại để modal gọi được đúng cách.
-* Luồng join group, profile, dashboard ngoài phạm vi.
-
----
-
-# Việc cần làm
-
-## 1. Tìm page Add Bill hiện tại
-
-Tìm các file liên quan:
+Tìm trong Add Bill form/modal các đoạn liên quan:
 
 ```bash
-grep -R "Thêm hóa đơn" src
-grep -R "add-bill" src
-grep -R "createBill" src
-grep -R "Tổng số tiền" src
-grep -R "Người trả tiền" src
+grep -R "Xác nhận" src
+grep -R "Confirm" src
+grep -R "submit" src/components src/app
 ```
 
-Các file có thể liên quan:
-
-```txt
-src/app/group/[id]/add-bill/page.tsx
-src/app/dashboard/group/[id]/add-bill/page.tsx
-src/components/AddBillForm.tsx
-src/lib/actions/bill.ts
-src/lib/actions/group.ts
-```
-
-Không xóa logic vội. Đọc trước toàn bộ flow hiện tại.
-
----
-
-## 2. Tách form Add Bill thành component riêng
-
-Nếu form hiện đang nằm trực tiếp trong page, tách thành component:
-
-```txt
-src/components/bills/AddBillForm.tsx
-```
-
-Component này nhận props:
-
-```ts
-type AddBillFormProps = {
-  groupId: string;
-  members: Array<{
-    _id: string;
-    name: string;
-    image?: string | null;
-  }>;
-  onSuccess?: () => void;
-  onCancel?: () => void;
-};
-```
-
-Yêu cầu:
-
-* Giữ nguyên logic chọn người trả tiền.
-* Giữ nguyên logic chọn người cùng tham gia.
-* Giữ nguyên logic chia đều/tùy chỉnh nếu đang có.
-* Giữ nguyên validation hiện tại.
-* Giữ nguyên server action/API đang tạo bill.
-
----
-
-## 3. Tạo Add Bill Modal
-
-Tạo component:
-
-```txt
-src/components/bills/AddBillModal.tsx
-```
-
-Props:
-
-```ts
-type AddBillModalProps = {
-  open: boolean;
-  onClose: () => void;
-  groupId: string;
-  members: Member[];
-};
-```
-
-Modal yêu cầu:
-
-* Overlay nền mờ nhẹ.
-* Card modal bo góc, sạch, responsive.
-* Desktop: modal nằm giữa màn hình, max width khoảng `max-w-lg` hoặc `max-w-xl`.
-* Mobile: modal gần full width, có margin, không tràn ngang.
-* Nội dung modal scroll được nếu dài.
-* Nút submit không được đè lên danh sách người tham gia.
-* Có nút đóng `X` hoặc `Hủy`.
-
-Gợi ý layout:
+Nếu thấy wrapper kiểu:
 
 ```tsx
-<div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
-  <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-5 shadow-xl">
-    ...
-  </div>
+<div className="bg-white p-4">
+  <button>...</button>
 </div>
 ```
 
-Nếu project có dark mode thì thêm class dark tương ứng. Nếu không có dark mode, không tự thêm dark mode mới.
-
----
-
-## 4. Sửa Group Detail để mở modal
-
-Trong trang group detail hoặc GroupClient:
-
-* Thay Link/nút đang đi đến route add bill:
+hãy đổi thành một trong các hướng:
 
 ```tsx
-<Link href={`/group/${groupId}/add-bill`}>
+<div className="bg-transparent px-0 pt-4">
+  <button>...</button>
+</div>
 ```
 
-hoặc:
+hoặc nếu nằm trong modal:
 
 ```tsx
-router.push(`/group/${groupId}/add-bill`)
+<div className="sticky bottom-0 mt-4 border-t border-slate-100 bg-white/95 p-4 backdrop-blur">
+  <button>...</button>
+</div>
 ```
 
-bằng state modal:
+Nhưng phải đảm bảo background khớp với modal, không tạo mảng trắng thừa trên page.
+
+Button style gợi ý:
 
 ```tsx
-const [showAddBill, setShowAddBill] = useState(false);
-
-<button onClick={() => setShowAddBill(true)}>
-  Thêm hóa đơn
+<button
+  type="submit"
+  disabled={isSubmitting}
+  className="flex w-full items-center justify-center rounded-2xl bg-violet-600 px-4 py-3 font-semibold text-white shadow-sm transition hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-70"
+>
+  {isSubmitting ? "Đang tạo..." : "Xác nhận"}
 </button>
-
-<AddBillModal
-  open={showAddBill}
-  onClose={() => setShowAddBill(false)}
-  groupId={groupId}
-  members={group.members}
-/>
 ```
-
-Không dùng route navigation cho hành động thêm hóa đơn từ group nữa.
 
 ---
 
-## 5. Sau khi tạo bill thành công
+# Phần 2: Gom toàn bộ thời gian submit + refresh/cache vào loading
 
-Sau submit thành công:
+Hiện trạng:
 
-* Đóng modal.
-* Cập nhật UI group.
-
-Nếu project dùng SWR:
-
-```ts
-mutate(`/api/groups/${groupId}`);
-mutate("/api/groups");
-```
-
-Nếu chưa dùng SWR:
-
-* Có thể dùng callback `onSuccess`.
-* Có thể tạm dùng `router.refresh()` một lần sau khi tạo bill, nhưng không lạm dụng.
-* Ưu tiên update state/cache cục bộ nếu đã có data.
+* Khi bấm xác nhận, bill được tạo.
+* Sau đó app refresh/reload page hoặc route.
+* Trong lúc refresh/cache lại, user thấy bị khựng hoặc cache tức thì bị mất.
 
 Yêu cầu:
 
-* Không reload toàn bộ page bằng `window.location`.
-* Không redirect sang page khác.
-* Không bắt user bấm back.
+* Khi user bấm xác nhận:
+
+  1. Set `isSubmitting = true`
+  2. Gọi create bill
+  3. Refresh/mutate lại dữ liệu group/dashboard
+  4. Chạy lại preload/cache cần thiết nếu có
+  5. Sau khi tất cả xong mới set `isSubmitting = false`
+  6. Sau đó mới đóng modal hoặc hiển thị lại group
+
+Pseudo mong muốn:
+
+```tsx
+const handleSubmit = async (formData) => {
+  try {
+    setIsSubmitting(true);
+
+    await createBill(formData);
+
+    // Nếu dùng SWR:
+    await mutate(`/api/groups/${groupId}`);
+    await mutate("/api/groups");
+
+    // Nếu có hàm preload group detail thì gọi lại ở đây
+    await preloadGroupData?.(groupId);
+
+    onSuccess?.();
+    onClose?.();
+  } catch (error) {
+    setError("Không thể tạo hóa đơn. Vui lòng thử lại.");
+  } finally {
+    setIsSubmitting(false);
+  }
+};
+```
+
+Nếu hiện tại đang dùng `router.refresh()`:
+
+* Không đóng modal ngay trước khi refresh.
+* Giữ loading overlay/nút loading trong lúc refresh.
+* Ưu tiên dùng `mutate()`/cache update thay vì full page reload nếu project đã dùng SWR.
+* Nếu bắt buộc phải reload route, hãy giữ loading state cho đến khi data chính đã được refetch xong.
 
 ---
 
-## 6. Giữ route add-bill nếu cần fallback
+# Phần 3: Không reload bằng window.location nếu không cần
 
-Không bắt buộc xóa ngay route:
+Tìm các đoạn:
 
-```txt
-/group/[id]/add-bill
+```bash
+grep -R "window.location" src
+grep -R "location.reload" src
+grep -R "router.refresh" src
 ```
 
-Có thể giữ lại để tránh broken link/direct link.
+Yêu cầu:
 
-Nhưng button chính trong group không được dùng route này nữa.
+* Không dùng `window.location.reload()` nếu có thể tránh.
+* Không dùng `window.location.href` để quay về group.
+* Ưu tiên:
 
-Nếu muốn xử lý route cũ:
-
-* Có thể redirect về `/group/[id]`.
-* Hoặc vẫn render form cũ tạm thời.
-* Không phá build.
+  * update local state
+  * SWR mutate
+  * hoặc router.refresh chỉ như fallback
 
 ---
 
-# Fix UI form Add Bill
+# Phần 4: Loading UI trong modal
 
-## 7. Fix input lỗi nền/chữ
+Khi submit:
 
-Hiện tại input đang bị lỗi như ảnh:
+* Disable toàn bộ input/button để tránh bấm 2 lần.
+* Nút xác nhận hiện spinner hoặc text “Đang tạo...”
+* Có thể thêm overlay nhẹ trong modal.
 
-* nền input bị đen
-* chữ/placeholder bị tối
-* font size quá lớn
-* nhìn như bị bôi đen
-
-Cần chuẩn hóa tất cả input trong Add Bill form.
-
-Input title/content:
+Ví dụ spinner:
 
 ```tsx
-className="w-full border-0 bg-transparent text-base font-medium text-slate-900 placeholder:text-slate-400 outline-none sm:text-lg"
+<span className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
 ```
 
-Input amount:
+Button:
 
 ```tsx
-className="w-full border-0 bg-transparent text-2xl font-bold text-slate-900 placeholder:text-slate-400 outline-none sm:text-3xl"
+<button disabled={isSubmitting}>
+  {isSubmitting && <Spinner />}
+  {isSubmitting ? "Đang tạo hóa đơn..." : "Xác nhận"}
+</button>
 ```
 
-Nếu đang dùng input có background riêng thì dùng:
-
-```tsx
-className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
-```
-
-Tuyệt đối tránh:
-
-```txt
-bg-black
-text-slate-800 trên nền đen
-text-white trên nền trắng
-placeholder màu quá tối
-font-size quá lớn không kiểm soát
-```
+Không để user bấm nhiều lần tạo trùng bill.
 
 ---
 
-## 8. Fix button xác nhận bị đè nội dung
+# Phần 5: Sau khi submit thành công
 
-Không dùng `position: fixed` hoặc `absolute` sai cách làm nút đè lên list.
+Yêu cầu UX:
 
-Nếu muốn nút luôn dễ bấm trong modal:
+* Bill mới xuất hiện trong group sau khi modal đóng.
+* Dashboard/group cache được cập nhật.
+* User không thấy trắng màn hình hoặc giật route.
+* Nếu cần chờ 1–2 giây để refresh/cache lại, cứ để nút/modal loading trong khoảng đó.
+* Khi loading xong, modal đóng và group đã có dữ liệu mới.
 
-* Dùng footer sticky bên trong modal.
-
-Ví dụ:
+Nếu dùng SWR:
 
 ```tsx
-<div className="sticky bottom-0 -mx-5 mt-4 border-t border-slate-100 bg-white p-5">
-  <button className="w-full rounded-2xl bg-violet-600 px-4 py-3 font-semibold text-white">
-    Xác nhận
-  </button>
-</div>
+await mutate(`/api/groups/${groupId}`);
+await mutate("/api/groups");
 ```
 
-Nhưng phải đảm bảo:
-
-* Nội dung list không bị che.
-* Có padding bottom hợp lý.
-* Mobile không vỡ.
-
----
-
-## 9. Chuẩn hóa section style
-
-Các section như:
-
-* Thông tin hóa đơn
-* Người trả tiền
-* Cùng tham gia
-
-nên có spacing rõ:
+Nếu có cache prefetch:
 
 ```tsx
-<section className="space-y-3">
-  <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
-    ...
-  </h3>
-  ...
-</section>
-```
-
-Card form:
-
-```tsx
-<div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
-  ...
-</div>
+await preloadGroupData(groupId);
 ```
 
 ---
 
-## 10. Người trả tiền / người tham gia
+# Phần 6: Test checklist
 
-Giữ nguyên logic hiện tại.
+Sau khi sửa, test:
 
-Chỉ chỉnh UI:
-
-* Button chọn người trả tiền rõ active/inactive.
-* Avatar size đều.
-* Tên không bị vỡ.
-* Mobile scroll ngang nếu nhiều member.
-
-Gợi ý active:
-
-```tsx
-className="rounded-2xl bg-violet-600 text-white shadow-sm"
-```
-
-Inactive:
-
-```tsx
-className="rounded-2xl border border-slate-200 bg-white text-slate-700"
-```
-
----
-
-## 11. Không thêm AI scan feature mới
-
-Trong ảnh có nút:
-
-```txt
-Quét hóa đơn AI
-```
-
-Nếu feature này đã tồn tại thì giữ nguyên UI, chỉ polish style.
-
-Không được implement thêm logic AI mới trong task này.
-
----
-
-# Test checklist
-
-Sau khi sửa, chạy:
+1. Vào group.
+2. Bấm “Thêm hóa đơn”.
+3. Modal mở.
+4. Nút xác nhận không còn khung trắng thừa.
+5. Nhập nội dung và số tiền.
+6. Bấm xác nhận.
+7. Nút chuyển sang loading.
+8. Không bấm được lần 2.
+9. Trong lúc tạo bill và refresh/cache, modal vẫn giữ trạng thái loading.
+10. Khi xong, modal đóng.
+11. Group hiển thị bill mới.
+12. Không bị reload trắng màn hình rõ rệt.
+13. Không mất dữ liệu cache/preload một cách gây khựng.
+14. Test mobile và desktop.
+15. Chạy:
 
 ```bash
 npm run lint
 npm run build
 ```
-
-Test thủ công:
-
-1. Login.
-2. Vào dashboard.
-3. Vào một group.
-4. Bấm “Thêm hóa đơn”.
-5. Modal hiện ngay, không chuyển page.
-6. Input nội dung đọc được, không bị nền đen.
-7. Input số tiền đọc được, không bị nền đen.
-8. Chọn người trả tiền hoạt động.
-9. Chọn người tham gia hoạt động.
-10. Chia đều/tùy chỉnh nếu có vẫn hoạt động.
-11. Nút xác nhận không đè lên danh sách.
-12. Submit tạo hóa đơn thành công.
-13. Modal đóng.
-14. Group cập nhật hóa đơn mới.
-15. Không cần back page.
-16. Không có request route `/add-bill` khi bấm nút thêm hóa đơn từ group.
-17. Test mobile width 375px/390px.
-18. Test desktop.
-19. Không thay đổi logic tính toán.
 
 ---
 
@@ -450,27 +237,11 @@ Test thủ công:
 
 Hoàn thành khi:
 
-* Add bill mở bằng modal trong group.
-* Không còn phải load sang page add-bill khi bấm thêm hóa đơn.
-* Form thêm hóa đơn không còn lỗi input nền/chữ.
-* Nút xác nhận không đè lên nội dung.
-* Tạo hóa đơn vẫn hoạt động đúng.
-* Group cập nhật sau khi tạo hóa đơn.
-* Không thay đổi business logic.
-* Không thêm tính năng mới.
-* Build production thành công.
-
----
-
-# Báo cáo sau khi hoàn thành
-
-Hãy báo lại:
-
-1. Đã sửa/thêm file nào.
-2. Form Add Bill được tách thành component nào.
-3. Modal nằm ở component nào.
-4. Button thêm hóa đơn trong group đã đổi từ route navigation sang modal state ra sao.
-5. Sau khi tạo bill thì cập nhật group bằng cách nào.
-6. Đã fix input lỗi nền/chữ ở đâu.
-7. Có giữ route `/add-bill` cũ không.
-8. Kết quả `npm run lint` và `npm run build`.
+* Không còn mảng/viền trắng thừa quanh nút “Xác nhận”.
+* Bấm xác nhận có loading rõ ràng.
+* Loading bao trùm cả thời gian tạo bill và refresh/cache lại dữ liệu.
+* Không tạo bill trùng khi bấm nhiều lần.
+* Modal chỉ đóng sau khi dữ liệu group đã cập nhật xong.
+* Group hiển thị bill mới sau khi modal đóng.
+* Không thay đổi logic chia tiền/bill.
+* Build thành công.
