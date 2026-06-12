@@ -17,7 +17,7 @@ export interface IBill extends Document {
 
 const BillSchema = new Schema<IBill>({
   groupId: { type: Schema.Types.ObjectId, ref: 'Group', required: true },
-  description: { type: String, required: true },
+  description: { type: String, required: true, trim: true, maxlength: 100 },
   totalAmount: { type: Number, required: true },
   paidBy: { type: Schema.Types.ObjectId, ref: 'User', required: true },
   splits: [

@@ -38,7 +38,7 @@ export interface PublicUserDocument {
   createdAt?: Date | string | number | null;
 }
 
-export const USER_PUBLIC_SELECT = "name image email googleName googleImage customName customImage createdAt updatedAt";
+export const USER_PUBLIC_SELECT = "name image googleName googleImage customName customImage createdAt updatedAt";
 
 export function buildExistingGoogleUserPatch(
   existingUser: StoredGoogleUserFields,

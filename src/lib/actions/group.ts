@@ -5,7 +5,6 @@ import connectDB from "@/lib/db";
 import Group from "@/models/Group";
 import { nanoid } from "nanoid";
 import { revalidatePath } from "next/cache";
-import mongoose from 'mongoose';
 import { toPublicUser, USER_PUBLIC_SELECT, type PublicUserDocument } from "@/lib/current-user";
 
 type ObjectIdLike = { toString(): string };
@@ -65,13 +64,8 @@ export async function joinGroupByCode(code: string) {
 
   await connectDB();
 
-  let group;
-  
-  if (mongoose.Types.ObjectId.isValid(code)) {
-    group = await Group.findById(code).select("_id members");
-  } else {
-    group = await Group.findOne({ inviteCode: code }).select("_id members");
-  }
+  // ONLY allow joining by inviteCode, NEVER by groupId directly
+  const group = await Group.findOne({ inviteCode: code }).select("_id members");
   
   if (!group) throw new Error("Mã nhóm không tồn tại");
 
@@ -175,7 +169,10 @@ export async function getGroupById(id: string) {
 
   await connectDB();
   
-  const group = await Group.findById(id)
+  const group = await Group.findOne({
+    _id: id,
+    members: session.user.id
+  })
     .populate("members", USER_PUBLIC_SELECT)
     .lean<PopulatedGroup>();
     

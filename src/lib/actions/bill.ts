@@ -19,6 +19,11 @@ export async function createBill(
 
   await connectDB();
 
+  // Verify membership
+  const Group = (await import("@/models/Group")).default;
+  const isMember = await Group.exists({ _id: groupId, members: session.user.id });
+  if (!isMember) throw new Error("Forbidden");
+
   const bill = await Bill.create({
     groupId,
     description: data.description,
@@ -37,6 +42,11 @@ export async function getBillsByGroupId(groupId: string) {
   if (!session?.user?.id) return [];
 
   await connectDB();
+
+  // Verify membership
+  const Group = (await import("@/models/Group")).default;
+  const isMember = await Group.exists({ _id: groupId, members: session.user.id });
+  if (!isMember) return [];
 
   const bills = await Bill.find({ groupId })
     .populate("paidBy", USER_PUBLIC_SELECT)

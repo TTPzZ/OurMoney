@@ -11,6 +11,11 @@ export async function markAsPaid(groupId: string, to: string, amount: number) {
 
   await connectDB();
 
+  // Verify membership
+  const Group = (await import("@/models/Group")).default;
+  const isMember = await Group.exists({ _id: groupId, members: session.user.id });
+  if (!isMember) throw new Error("Forbidden");
+
   await Settlement.create({
     groupId,
     from: session.user.id,
@@ -27,6 +32,11 @@ export async function confirmReceived(groupId: string, settlementId: string) {
 
   await connectDB();
 
+  // Verify membership
+  const Group = (await import("@/models/Group")).default;
+  const isMember = await Group.exists({ _id: groupId, members: session.user.id });
+  if (!isMember) throw new Error("Forbidden");
+
   await Settlement.findByIdAndUpdate(settlementId, {
     status: 'completed',
     completedAt: new Date()
@@ -38,6 +48,11 @@ export async function directConfirm(groupId: string, from: string, amount: numbe
   if (!session?.user?.id) throw new Error("Unauthorized");
 
   await connectDB();
+
+  // Verify membership
+  const Group = (await import("@/models/Group")).default;
+  const isMember = await Group.exists({ _id: groupId, members: session.user.id });
+  if (!isMember) throw new Error("Forbidden");
 
   // Create a completed settlement directly
   await Settlement.create({
@@ -52,7 +67,16 @@ export async function directConfirm(groupId: string, from: string, amount: numbe
 }
 
 export async function getSettlementsByGroupId(groupId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return [];
+
   await connectDB();
+
+  // Verify membership
+  const Group = (await import("@/models/Group")).default;
+  const isMember = await Group.exists({ _id: groupId, members: session.user.id });
+  if (!isMember) return [];
+
   const settlements = await Settlement.find({ groupId })
     .populate('from', USER_PUBLIC_SELECT)
     .populate('to', USER_PUBLIC_SELECT)
