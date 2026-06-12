@@ -14,7 +14,7 @@ import Section from "@/components/ui/Section";
 interface Member {
   _id: string;
   name: string;
-  image?: string;
+  image?: string | null;
 }
 
 interface OCRItem {
@@ -26,11 +26,17 @@ interface OCRItem {
 export default function AddBillForm({ 
   groupId, 
   members, 
-  currentUserId 
+  currentUserId,
+  onSuccess,
+  onCancel,
+  isModal = false
 }: { 
   groupId: string; 
   members: Member[]; 
   currentUserId: string;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+  isModal?: boolean;
 }) {
   const router = useRouter();
   const { mutate } = useSWRConfig();
@@ -211,7 +217,12 @@ export default function AddBillForm({
 
       mutate(`/api/groups/${groupId}`);
       mutate("/api/groups");
-      router.push(`/group/${groupId}`);
+      
+      if (onSuccess) {
+        onSuccess();
+      } else {
+        router.push(`/group/${groupId}`);
+      }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : "Đã có lỗi xảy ra";
       setError(errorMsg);
@@ -220,18 +231,31 @@ export default function AddBillForm({
     }
   };
 
-  return (
-    <main className="min-h-screen bg-slate-50 flex flex-col items-center p-4 pb-32">
-      {/* Header */}
-      <div className="w-full max-w-md flex justify-between items-center mb-6 pt-4">
-        <Link href={`/group/${groupId}`} className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 text-slate-500 active:scale-95 transition-transform">
-          <ChevronLeft size={24} />
-        </Link>
-        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Thêm hóa đơn</h1>
-        <div className="w-10"></div>
-      </div>
+  const Container = isModal ? "div" : "main";
 
-      <div className="w-full max-w-md space-y-6">
+  return (
+    <Container className={`${isModal ? "" : "min-h-screen"} bg-slate-50 flex flex-col items-center p-4 pb-32`}>
+      {/* Header - Only show if not in modal */}
+      {!isModal && (
+        <div className="w-full max-w-md flex justify-between items-center mb-6 pt-4">
+          <Link 
+            href={`/group/${groupId}`} 
+            onClick={(e) => {
+              if (onCancel) {
+                e.preventDefault();
+                onCancel();
+              }
+            }}
+            className="p-2 bg-white rounded-xl shadow-sm border border-slate-100 text-slate-500 active:scale-95 transition-transform"
+          >
+            <ChevronLeft size={24} />
+          </Link>
+          <h1 className="text-xl font-bold text-slate-900 tracking-tight">Thêm hóa đơn</h1>
+          <div className="w-10"></div>
+        </div>
+      )}
+
+      <div className={`w-full ${isModal ? "" : "max-w-md"} space-y-6`}>
         
         {/* Info Header with AI Button */}
         <div className="flex justify-between items-center px-1">
@@ -247,9 +271,9 @@ export default function AddBillForm({
         </div>
 
         {/* Step 1: Info */}
-        <Card className="p-6 space-y-4">
+        <Card className="p-5 space-y-4">
           <div className="flex items-center gap-3 border-b border-slate-50 pb-4">
-            <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600">
+            <div className="w-10 h-10 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
               <Receipt size={20} />
             </div>
             <input
@@ -257,19 +281,19 @@ export default function AddBillForm({
               placeholder="Nội dung (ví dụ: Ăn trưa)"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="flex-1 bg-white text-slate-900 border-none outline-none text-lg font-bold placeholder:text-slate-400 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+              className="w-full border-0 bg-transparent text-base font-medium text-slate-900 placeholder:text-slate-400 outline-none sm:text-lg"
             />
           </div>
           <div className="flex items-center gap-3 pt-2">
-            <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 font-black">
+            <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 font-black shrink-0">
               ₫
             </div>
             <input
               type="number"
-              placeholder="Tổng số tiền"
+              placeholder="0"
               value={totalAmount}
               onChange={(e) => setTotalAmount(e.target.value === "" ? "" : Number(e.target.value))}
-              className="flex-1 bg-white text-slate-900 border-none outline-none text-3xl font-black placeholder:text-slate-400 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500"
+              className="w-full border-0 bg-transparent text-2xl font-bold text-slate-900 placeholder:text-slate-400 outline-none sm:text-3xl"
             />
           </div>
         </Card>
@@ -282,7 +306,7 @@ export default function AddBillForm({
                 <Card key={idx} className="p-4 space-y-3">
                   <div className="flex justify-between items-start">
                     <span className="font-bold text-slate-900 leading-tight flex-1 pr-4">{item.name}</span>
-                    <span className="font-black text-indigo-600">₫{item.price.toLocaleString()}</span>
+                    <span className="font-black text-indigo-600 shrink-0">₫{item.price.toLocaleString()}</span>
                   </div>
                   <div className="pt-2 border-t border-slate-50">
                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-2 tracking-widest">Ai đã dùng món này?</p>
@@ -319,7 +343,7 @@ export default function AddBillForm({
                 className={`flex items-center gap-2 px-4 py-3 rounded-2xl border transition-all shrink-0 active:scale-95 ${
                   paidBy === member._id 
                     ? "bg-indigo-600 border-indigo-600 text-white shadow-md" 
-                    : "bg-white border-slate-100 text-slate-600"
+                    : "bg-white border-slate-100 text-slate-700 font-medium"
                 }`}
               >
                 <div className="w-6 h-6 rounded-full overflow-hidden bg-slate-200">
@@ -388,7 +412,7 @@ export default function AddBillForm({
                           placeholder="0"
                           value={customAmounts[member._id] || ""}
                           onChange={(e) => handleCustomAmountChange(member._id, e.target.value)}
-                          className="w-24 text-right bg-white px-2 py-1 rounded-lg outline-none font-black text-indigo-600 placeholder:text-slate-400 text-sm border border-indigo-100 dark:bg-slate-950 dark:text-indigo-300 dark:placeholder:text-slate-500"
+                          className="w-24 text-right bg-white px-2 py-1 rounded-lg outline-none font-black text-indigo-600 placeholder:text-slate-400 text-sm border border-indigo-100"
                         />
                       )}
                     </div>
@@ -411,8 +435,8 @@ export default function AddBillForm({
         {error && <p className="text-red-500 text-xs font-bold text-center">{error}</p>}
       </div>
 
-      {/* Fixed Bottom Action */}
-      <div className="fixed bottom-8 w-full max-w-md px-6">
+      {/* Action Button */}
+      <div className={`${isModal ? "sticky bottom-0 -mx-4 mt-8 bg-white/80 backdrop-blur-md p-4 border-t border-slate-100" : "fixed bottom-8 w-full max-w-md px-6"} z-10`}>
         <Button
           onClick={handleSubmit}
           disabled={!isValid || isPending}
@@ -424,6 +448,6 @@ export default function AddBillForm({
           Xác nhận
         </Button>
       </div>
-    </main>
+    </Container>
   );
 }

@@ -1,452 +1,421 @@
-# Nhiệm vụ: Nâng cấp giao diện OurMoney, chỉ chỉnh UI/UX, không thay đổi logic
+# Nhiệm vụ: Chuyển Add Bill page thành modal trong Group, fix UI form thêm hóa đơn
 
 ## Bối cảnh
 
-Project: **OurMoney**
-Stack hiện tại:
+Project: OurMoney
+Stack:
 
 * Next.js App Router
-* NextAuth / Google Login
-* MongoDB / Mongoose
+* NextAuth
+* MongoDB/Mongoose
 * Tailwind CSS
-* Deploy trên Vercel
+* Có page thêm hóa đơn hiện tại, route dạng `/group/[id]/add-bill` hoặc tương tự.
 
-Mục tiêu lần này là **chỉ nâng cấp giao diện** để web nhìn sạch sẽ, hiện đại, thân thiện và nhất quán hơn.
+Hiện tại trang “Thêm hóa đơn” có nhiều vấn đề:
 
-Tuyệt đối không thêm tính năng mới, không sửa flow, không thay đổi business logic, không thay đổi API, không thay đổi database schema, không chỉnh auth, không chỉnh cache, không chỉnh route.
+* Khi bấm thêm hóa đơn phải load sang page mới.
+* Sau khi tạo hóa đơn lại phải quay về group và load lại.
+* UX bị chậm và không giống app.
+* UI form đang lỗi:
+
+  * input bị nền đen/chữ tối đè lên nhau
+  * placeholder khó đọc
+  * font size trong input quá lớn
+  * nút xác nhận bị đè lên nội dung bên dưới
+  * mobile/desktop đều có nguy cơ vỡ layout
+
+Mục tiêu lần này:
+
+* Bỏ flow mở trang riêng để thêm hóa đơn.
+* Chuyển form thêm hóa đơn thành modal/popup mở ngay trong trang group.
+* Không thay đổi logic tính tiền, chia tiền, người trả tiền, người tham gia.
+* Không thay đổi database schema.
+* Không thay đổi auth.
+* Không thêm tính năng mới ngoài việc chuyển UI từ page sang modal.
+* Fix UI form cho sạch, dễ dùng, không lỗi màu/font/spacing.
 
 ---
 
-# Mục tiêu chính
+# Mục tiêu UX mới
 
-Cải thiện UI hiện tại theo hướng:
-
-* Sạch sẽ hơn.
-* Dễ nhìn hơn.
-* Thân thiện với người dùng hơn.
-* Đồng bộ màu sắc, font, khoảng cách, bo góc, shadow.
-* Không bị lỗi font.
-* Không bị lỗi bóng đổ quá đậm/quá lệch.
-* Không bị lỗi input chữ trùng màu nền.
-* Responsive tốt trên mobile và desktop.
-* Bám sát giao diện và cấu trúc hiện tại của dự án.
-
-Không được biến web thành một thiết kế hoàn toàn khác.
-
----
-
-# Phạm vi được phép chỉnh
-
-Chỉ được chỉnh:
-
-1. Tailwind className.
-2. Layout spacing.
-3. Typography.
-4. Button style.
-5. Card style.
-6. Input/select/textarea style.
-7. Modal/dialog visual style.
-8. Avatar/image display style.
-9. Header/navbar visual style.
-10. Loading/skeleton visual style nếu đã có sẵn.
-11. Empty state visual style nếu đã có sẵn.
-12. Responsive class cho mobile/tablet/desktop.
-13. Các component UI thuần giao diện.
-
-Có thể tạo component UI dùng chung nếu chỉ để giảm lặp giao diện, ví dụ:
+Flow mong muốn:
 
 ```txt
-Button
-Input
-Card
-Avatar
-PageHeader
-SectionCard
+User đang ở Group Detail
+→ bấm nút “Thêm hóa đơn”
+→ mở modal Add Bill ngay lập tức
+→ nhập nội dung/số tiền/người trả/người tham gia
+→ bấm “Tạo hóa đơn” hoặc “Xác nhận”
+→ submit loading trong modal
+→ tạo bill thành công
+→ đóng modal
+→ cập nhật danh sách hóa đơn trong group
+→ không chuyển page
+→ không reload toàn bộ route nếu không cần
 ```
 
-Nhưng không được thay đổi behavior.
-
----
-
-# Những thứ tuyệt đối không được sửa
-
-Không được chỉnh:
-
-1. Auth flow.
-2. Login/logout logic.
-3. Server actions.
-4. API route logic.
-5. MongoDB query logic.
-6. Database schema/model.
-7. SWR/cache logic.
-8. Route/navigation flow.
-9. Permission/security check.
-10. Bill calculation logic.
-11. Settlement calculation logic.
-12. Group join/share logic.
-13. Upload avatar logic.
-14. Any business logic.
-15. Any new feature.
-
-Không được thêm:
-
-* Realtime.
-* Chart mới.
-* Animation phức tạp.
-* Modal mới không có trong yêu cầu.
-* Page mới.
-* Button/action mới.
-* Flow mới.
-
----
-
-# Yêu cầu cách làm
-
-## 1. Đọc dự án trước khi sửa
-
-Trước khi chỉnh UI, hãy đọc cấu trúc hiện tại:
+Nếu có lỗi:
 
 ```txt
-src/app
-src/components
-src/lib
-src/styles hoặc globals.css
-tailwind.config
+→ modal vẫn mở
+→ hiển thị lỗi trong modal
+→ không mất dữ liệu form nếu có thể
 ```
-
-Xác định:
-
-* Các page chính.
-* Các component đang dùng lại.
-* Theme/màu hiện tại.
-* Class Tailwind hiện tại.
-* Nơi đang bị lỗi input/font/shadow.
-
-Không sửa vội theo cảm tính.
 
 ---
 
-## 2. Bám sát style hiện tại
+# Phạm vi được phép sửa
 
-Không đổi brand quá mạnh.
+Được sửa:
 
-Nếu web đang dùng tone xanh/tím/trắng thì giữ tone đó, chỉ tinh chỉnh cho đẹp hơn.
+* UI Add Bill form.
+* Component group detail để mở modal.
+* Cách gọi create bill từ modal.
+* Cache/mutate sau khi tạo bill nếu project đang dùng SWR.
+* Styling input/button/card/modal.
+* Có thể tách form hiện tại thành component dùng lại.
 
-Ưu tiên style:
+Không được sửa:
+
+* Logic chia tiền.
+* Logic tính settlement.
+* MongoDB schema nếu không bắt buộc.
+* Auth/session.
+* Permission check.
+* API/server action create bill, trừ khi cần expose lại để modal gọi được đúng cách.
+* Luồng join group, profile, dashboard ngoài phạm vi.
+
+---
+
+# Việc cần làm
+
+## 1. Tìm page Add Bill hiện tại
+
+Tìm các file liên quan:
+
+```bash
+grep -R "Thêm hóa đơn" src
+grep -R "add-bill" src
+grep -R "createBill" src
+grep -R "Tổng số tiền" src
+grep -R "Người trả tiền" src
+```
+
+Các file có thể liên quan:
 
 ```txt
-clean
-modern
-soft
-rounded
-minimal
-friendly
-mobile-first
+src/app/group/[id]/add-bill/page.tsx
+src/app/dashboard/group/[id]/add-bill/page.tsx
+src/components/AddBillForm.tsx
+src/lib/actions/bill.ts
+src/lib/actions/group.ts
 ```
 
-Không dùng style quá màu mè hoặc quá corporate.
+Không xóa logic vội. Đọc trước toàn bộ flow hiện tại.
 
 ---
 
-## 3. Chuẩn hóa spacing
+## 2. Tách form Add Bill thành component riêng
 
-Kiểm tra và chỉnh lại:
+Nếu form hiện đang nằm trực tiếp trong page, tách thành component:
 
-* Padding page.
-* Gap giữa các section.
-* Khoảng cách trong card.
-* Khoảng cách giữa title/subtitle/content.
-* Khoảng cách button group.
-* Mobile spacing.
-
-Gợi ý:
-
-* Page container: `max-w-5xl mx-auto px-4 sm:px-6 lg:px-8`
-* Section spacing: `space-y-6`
-* Card padding: `p-4 sm:p-6`
-* Button gap: `gap-2` hoặc `gap-3`
-
-Không để UI quá sát mép màn hình mobile.
-
----
-
-## 4. Chuẩn hóa card
-
-Các card nên có style nhất quán:
-
-```tsx
-rounded-2xl border border-slate-200 bg-white shadow-sm
+```txt
+src/components/bills/AddBillForm.tsx
 ```
 
-Dark mode nếu có:
+Component này nhận props:
 
-```tsx
-dark:border-slate-800 dark:bg-slate-950
+```ts
+type AddBillFormProps = {
+  groupId: string;
+  members: Array<{
+    _id: string;
+    name: string;
+    image?: string | null;
+  }>;
+  onSuccess?: () => void;
+  onCancel?: () => void;
+};
 ```
-
-Không dùng shadow quá đậm kiểu:
-
-```tsx
-shadow-2xl
-shadow-black/50
-```
-
-trừ khi thực sự cần.
-
-Ưu tiên:
-
-```tsx
-shadow-sm
-shadow-md
-```
-
----
-
-## 5. Chuẩn hóa button
-
-Các button phải rõ trạng thái:
-
-* Primary
-* Secondary
-* Danger
-* Ghost/Icon button
 
 Yêu cầu:
 
-* Click target đủ lớn trên mobile.
-* Hover/focus rõ.
-* Disabled nhìn khác active.
-* Không bị chữ trùng màu nền.
-
-Ví dụ style:
-
-```tsx
-inline-flex items-center justify-center rounded-xl px-4 py-2 text-sm font-medium transition
-focus:outline-none focus:ring-2 focus:ring-offset-2
-disabled:pointer-events-none disabled:opacity-50
-```
-
-Không thay đổi onClick, submit handler, href, type.
+* Giữ nguyên logic chọn người trả tiền.
+* Giữ nguyên logic chọn người cùng tham gia.
+* Giữ nguyên logic chia đều/tùy chỉnh nếu đang có.
+* Giữ nguyên validation hiện tại.
+* Giữ nguyên server action/API đang tạo bill.
 
 ---
 
-## 6. Chuẩn hóa input/select/textarea
+## 3. Tạo Add Bill Modal
 
-Đây là phần quan trọng vì hiện tại có lỗi chữ và nền trùng màu.
-
-Tất cả input/select/textarea phải đọc được ở desktop và mobile.
-
-Style gợi ý:
-
-```tsx
-w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400
-outline-none transition
-focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20
-disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500
-dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500
-```
-
-Kiểm tra toàn bộ:
-
-```bash
-grep -R "<input" src
-grep -R "<textarea" src
-grep -R "<select" src
-```
-
-Không để:
-
-* chữ trắng trên nền trắng
-* chữ đen trên nền đen
-* placeholder quá mờ
-* input quá nhỏ trên mobile
-
----
-
-## 7. Chuẩn hóa typography
-
-Kiểm tra title/subtitle/body text.
-
-Gợi ý:
-
-* Page title:
-
-```tsx
-text-2xl sm:text-3xl font-bold tracking-tight text-slate-950
-```
-
-* Section title:
-
-```tsx
-text-lg font-semibold text-slate-900
-```
-
-* Description:
-
-```tsx
-text-sm text-slate-500
-```
-
-Không dùng quá nhiều font-size khác nhau làm UI rối.
-
-Không đổi font global nếu không cần.
-
----
-
-## 8. Responsive mobile
-
-Kiểm tra kỹ ở mobile width:
+Tạo component:
 
 ```txt
-375px
-390px
-430px
+src/components/bills/AddBillModal.tsx
 ```
 
-Các lỗi cần tránh:
+Props:
 
-* Button tràn ngang.
-* Card sát mép màn hình.
-* Text quá dài không xuống dòng.
-* Modal quá rộng.
-* Header bị vỡ.
-* Avatar stack lệch.
-* Form input quá nhỏ.
-* Table/list bị overflow khó chịu.
+```ts
+type AddBillModalProps = {
+  open: boolean;
+  onClose: () => void;
+  groupId: string;
+  members: Member[];
+};
+```
 
-Có thể dùng:
+Modal yêu cầu:
+
+* Overlay nền mờ nhẹ.
+* Card modal bo góc, sạch, responsive.
+* Desktop: modal nằm giữa màn hình, max width khoảng `max-w-lg` hoặc `max-w-xl`.
+* Mobile: modal gần full width, có margin, không tràn ngang.
+* Nội dung modal scroll được nếu dài.
+* Nút submit không được đè lên danh sách người tham gia.
+* Có nút đóng `X` hoặc `Hủy`.
+
+Gợi ý layout:
 
 ```tsx
-flex-col sm:flex-row
-grid grid-cols-1 sm:grid-cols-2
-text-sm sm:text-base
-px-4 sm:px-6
+<div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center">
+  <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-3xl bg-white p-5 shadow-xl">
+    ...
+  </div>
+</div>
 ```
 
-Không được thay đổi flow chỉ để mobile đẹp.
+Nếu project có dark mode thì thêm class dark tương ứng. Nếu không có dark mode, không tự thêm dark mode mới.
 
 ---
 
-## 9. Kiểm tra các màn chính
+## 4. Sửa Group Detail để mở modal
 
-Cần polish các màn hiện có:
+Trong trang group detail hoặc GroupClient:
 
-1. Landing/home page.
-2. Login area nếu có.
-3. Dashboard.
-4. Group list/card.
-5. Group detail.
-6. Add bill form.
-7. Profile page.
-8. Invite/share group UI.
-9. Member/avatar area.
-10. Settlement/payment UI nếu có.
-11. Empty states nếu có.
-12. Loading states nếu có.
-
-Không thêm màn mới.
-
----
-
-## 10. Không làm hỏng state hoặc props
-
-Khi refactor component UI:
-
-* Giữ nguyên props.
-* Giữ nguyên event handlers.
-* Giữ nguyên form name/id nếu đang dùng.
-* Giữ nguyên submit behavior.
-* Giữ nguyên href.
-* Giữ nguyên route.
-* Giữ nguyên API call.
-
-Chỉ được bọc thêm layout hoặc đổi className.
-
-Ví dụ được phép:
+* Thay Link/nút đang đi đến route add bill:
 
 ```tsx
-<button onClick={handleSave} className="...">
+<Link href={`/group/${groupId}/add-bill`}>
 ```
 
-Không được đổi thành logic khác.
-
----
-
-## 11. Không xóa code logic
-
-Không xóa các đoạn:
-
-* auth check
-* validation
-* mutation
-* error handling
-* redirect
-* permission check
-
-Nếu thấy code xấu nhưng thuộc logic, chỉ ghi chú lại, không sửa trong phase này.
-
----
-
-## 12. Kiểm tra màu và dark mode
-
-Nếu project có dark mode:
-
-* Đảm bảo mọi text/bg/border có cặp dark tương ứng.
-* Input phải đọc được.
-* Card phải phân biệt nền.
-* Button primary vẫn nổi bật.
-
-Nếu project không có dark mode:
-
-* Không tự thêm dark mode mới.
-* Chỉ đảm bảo giao diện light mode ổn định.
-
----
-
-## 13. Hạn chế animation
-
-Được phép dùng transition nhẹ:
+hoặc:
 
 ```tsx
-transition
-hover:shadow-md
-active:scale-[0.99]
+router.push(`/group/${groupId}/add-bill`)
 ```
 
-Không thêm animation phức tạp, không thêm thư viện animation mới.
+bằng state modal:
+
+```tsx
+const [showAddBill, setShowAddBill] = useState(false);
+
+<button onClick={() => setShowAddBill(true)}>
+  Thêm hóa đơn
+</button>
+
+<AddBillModal
+  open={showAddBill}
+  onClose={() => setShowAddBill(false)}
+  groupId={groupId}
+  members={group.members}
+/>
+```
+
+Không dùng route navigation cho hành động thêm hóa đơn từ group nữa.
 
 ---
 
-## 14. Không thêm dependency UI mới nếu không cần
+## 5. Sau khi tạo bill thành công
 
-Không tự ý thêm:
+Sau submit thành công:
 
-* shadcn/ui
-* framer-motion
-* radix mới
-* material UI
-* bootstrap
-* daisyUI
+* Đóng modal.
+* Cập nhật UI group.
 
-Nếu project đã dùng sẵn thư viện nào thì có thể tận dụng, nhưng không đổi hệ UI.
+Nếu project dùng SWR:
+
+```ts
+mutate(`/api/groups/${groupId}`);
+mutate("/api/groups");
+```
+
+Nếu chưa dùng SWR:
+
+* Có thể dùng callback `onSuccess`.
+* Có thể tạm dùng `router.refresh()` một lần sau khi tạo bill, nhưng không lạm dụng.
+* Ưu tiên update state/cache cục bộ nếu đã có data.
+
+Yêu cầu:
+
+* Không reload toàn bộ page bằng `window.location`.
+* Không redirect sang page khác.
+* Không bắt user bấm back.
 
 ---
 
-# Quy trình làm
+## 6. Giữ route add-bill nếu cần fallback
 
-1. Đọc cấu trúc project.
-2. Liệt kê các page/component UI chính.
-3. Xác định các style đang không đồng bộ.
-4. Ưu tiên tạo/chỉnh UI component dùng chung nếu project đã có pattern phù hợp.
-5. Chỉnh từng màn, mỗi lần chỉ sửa class/layout.
-6. Không chạm logic.
-7. Chạy kiểm tra.
+Không bắt buộc xóa ngay route:
+
+```txt
+/group/[id]/add-bill
+```
+
+Có thể giữ lại để tránh broken link/direct link.
+
+Nhưng button chính trong group không được dùng route này nữa.
+
+Nếu muốn xử lý route cũ:
+
+* Có thể redirect về `/group/[id]`.
+* Hoặc vẫn render form cũ tạm thời.
+* Không phá build.
 
 ---
 
-# Test sau khi sửa
+# Fix UI form Add Bill
 
-Chạy:
+## 7. Fix input lỗi nền/chữ
+
+Hiện tại input đang bị lỗi như ảnh:
+
+* nền input bị đen
+* chữ/placeholder bị tối
+* font size quá lớn
+* nhìn như bị bôi đen
+
+Cần chuẩn hóa tất cả input trong Add Bill form.
+
+Input title/content:
+
+```tsx
+className="w-full border-0 bg-transparent text-base font-medium text-slate-900 placeholder:text-slate-400 outline-none sm:text-lg"
+```
+
+Input amount:
+
+```tsx
+className="w-full border-0 bg-transparent text-2xl font-bold text-slate-900 placeholder:text-slate-400 outline-none sm:text-3xl"
+```
+
+Nếu đang dùng input có background riêng thì dùng:
+
+```tsx
+className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+```
+
+Tuyệt đối tránh:
+
+```txt
+bg-black
+text-slate-800 trên nền đen
+text-white trên nền trắng
+placeholder màu quá tối
+font-size quá lớn không kiểm soát
+```
+
+---
+
+## 8. Fix button xác nhận bị đè nội dung
+
+Không dùng `position: fixed` hoặc `absolute` sai cách làm nút đè lên list.
+
+Nếu muốn nút luôn dễ bấm trong modal:
+
+* Dùng footer sticky bên trong modal.
+
+Ví dụ:
+
+```tsx
+<div className="sticky bottom-0 -mx-5 mt-4 border-t border-slate-100 bg-white p-5">
+  <button className="w-full rounded-2xl bg-violet-600 px-4 py-3 font-semibold text-white">
+    Xác nhận
+  </button>
+</div>
+```
+
+Nhưng phải đảm bảo:
+
+* Nội dung list không bị che.
+* Có padding bottom hợp lý.
+* Mobile không vỡ.
+
+---
+
+## 9. Chuẩn hóa section style
+
+Các section như:
+
+* Thông tin hóa đơn
+* Người trả tiền
+* Cùng tham gia
+
+nên có spacing rõ:
+
+```tsx
+<section className="space-y-3">
+  <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+    ...
+  </h3>
+  ...
+</section>
+```
+
+Card form:
+
+```tsx
+<div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+  ...
+</div>
+```
+
+---
+
+## 10. Người trả tiền / người tham gia
+
+Giữ nguyên logic hiện tại.
+
+Chỉ chỉnh UI:
+
+* Button chọn người trả tiền rõ active/inactive.
+* Avatar size đều.
+* Tên không bị vỡ.
+* Mobile scroll ngang nếu nhiều member.
+
+Gợi ý active:
+
+```tsx
+className="rounded-2xl bg-violet-600 text-white shadow-sm"
+```
+
+Inactive:
+
+```tsx
+className="rounded-2xl border border-slate-200 bg-white text-slate-700"
+```
+
+---
+
+## 11. Không thêm AI scan feature mới
+
+Trong ảnh có nút:
+
+```txt
+Quét hóa đơn AI
+```
+
+Nếu feature này đã tồn tại thì giữ nguyên UI, chỉ polish style.
+
+Không được implement thêm logic AI mới trong task này.
+
+---
+
+# Test checklist
+
+Sau khi sửa, chạy:
 
 ```bash
 npm run lint
@@ -455,19 +424,25 @@ npm run build
 
 Test thủ công:
 
-1. Mở home page.
-2. Login.
-3. Dashboard hiển thị đúng.
-4. Vào group.
-5. Mở add bill.
-6. Vào profile.
-7. Test các input trên desktop.
-8. Test các input trên mobile.
-9. Kiểm tra avatar/header/card/button.
-10. Kiểm tra không có lỗi text trùng màu nền.
-11. Kiểm tra không có layout vỡ ngang mobile.
-12. Kiểm tra các button vẫn hoạt động như trước.
-13. Kiểm tra form submit vẫn hoạt động như trước.
+1. Login.
+2. Vào dashboard.
+3. Vào một group.
+4. Bấm “Thêm hóa đơn”.
+5. Modal hiện ngay, không chuyển page.
+6. Input nội dung đọc được, không bị nền đen.
+7. Input số tiền đọc được, không bị nền đen.
+8. Chọn người trả tiền hoạt động.
+9. Chọn người tham gia hoạt động.
+10. Chia đều/tùy chỉnh nếu có vẫn hoạt động.
+11. Nút xác nhận không đè lên danh sách.
+12. Submit tạo hóa đơn thành công.
+13. Modal đóng.
+14. Group cập nhật hóa đơn mới.
+15. Không cần back page.
+16. Không có request route `/add-bill` khi bấm nút thêm hóa đơn từ group.
+17. Test mobile width 375px/390px.
+18. Test desktop.
+19. Không thay đổi logic tính toán.
 
 ---
 
@@ -475,36 +450,27 @@ Test thủ công:
 
 Hoàn thành khi:
 
-* Giao diện nhìn sạch và nhất quán hơn.
-* Không có lỗi font rõ ràng.
-* Không có shadow/border quá lỗi.
-* Input/select/textarea đọc được trên mọi màn.
-* Mobile không vỡ layout.
-* Desktop không bị trống hoặc lệch khó chịu.
+* Add bill mở bằng modal trong group.
+* Không còn phải load sang page add-bill khi bấm thêm hóa đơn.
+* Form thêm hóa đơn không còn lỗi input nền/chữ.
+* Nút xác nhận không đè lên nội dung.
+* Tạo hóa đơn vẫn hoạt động đúng.
+* Group cập nhật sau khi tạo hóa đơn.
+* Không thay đổi business logic.
 * Không thêm tính năng mới.
-* Không thay đổi flow.
-* Không thay đổi logic.
-* Không thay đổi API/database/auth.
 * Build production thành công.
 
 ---
 
-# Báo cáo sau khi làm xong
+# Báo cáo sau khi hoàn thành
 
 Hãy báo lại:
 
-1. Đã chỉnh những page/component nào.
-2. Những thay đổi UI chính là gì.
-3. Có tạo component UI dùng chung nào không.
-4. Đã sửa lỗi input contrast ở đâu.
-5. Đã kiểm tra mobile/desktop chưa.
-6. Có file logic nào bị đụng không. Nếu có, giải thích lý do.
-7. Kết quả `npm run lint` và `npm run build`.
-
----
-
-# Commit message gợi ý
-
-```bash
-style: polish app UI without changing user flows
-```
+1. Đã sửa/thêm file nào.
+2. Form Add Bill được tách thành component nào.
+3. Modal nằm ở component nào.
+4. Button thêm hóa đơn trong group đã đổi từ route navigation sang modal state ra sao.
+5. Sau khi tạo bill thì cập nhật group bằng cách nào.
+6. Đã fix input lỗi nền/chữ ở đâu.
+7. Có giữ route `/add-bill` cũ không.
+8. Kết quả `npm run lint` và `npm run build`.

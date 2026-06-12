@@ -15,6 +15,7 @@ import Button from "@/components/ui/Button";
 import Section from "@/components/ui/Section";
 import { useRouter } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
+import AddBillModal from "@/components/AddBillModal";
 import { deleteGroup, leaveGroup } from "@/lib/actions/group";
 import { markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
 import type { BillWithPayer, GroupDetailData, GroupMember, Settlement } from "@/lib/money-types";
@@ -32,6 +33,7 @@ export default function GroupClient({
 }) {
   const router = useRouter();
   const [showMembers, setShowMembers] = useState(false);
+  const [showAddBill, setShowAddBill] = useState(false);
   const { mutate: mutateGlobal } = useSWRConfig();
   const { data, error, mutate, isLoading, isValidating } = useSWR<GroupDetailData>(
     `/api/groups/${groupId}`, 
@@ -339,11 +341,19 @@ export default function GroupClient({
           size="xl"
           className="w-full shadow-2xl"
           leftIcon={<Plus size={24} />}
-          onClick={() => router.push(`/group/${groupId}/add-bill`)}
+          onClick={() => setShowAddBill(true)}
         >
           Thêm hóa đơn mới
         </Button>
       </div>
+
+      <AddBillModal
+        open={showAddBill}
+        onClose={() => setShowAddBill(false)}
+        groupId={groupId}
+        members={group.members}
+        currentUserId={userId}
+      />
 
       <GroupMembersDialog
         open={showMembers}
