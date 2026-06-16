@@ -32,14 +32,6 @@ export async function POST(req: NextRequest) {
     
     const genAI = new GoogleGenerativeAI(user.geminiApiKey);
     
-    // Debug: List available models to help user diagnose "limit: 0" or 404
-    try {
-      const models = await genAI.listModels();
-      console.log("[Gemini] Available Models for this Key:", models.map(m => m.name).join(", "));
-    } catch (listError) {
-      console.warn("[Gemini] Could not list models (possibly API Key restriction)");
-    }
-
     // Use gemini-2.5-flash as requested by user
     const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
