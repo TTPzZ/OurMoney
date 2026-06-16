@@ -20,11 +20,13 @@ export async function POST(req: NextRequest) {
     // Fallback to Mock Data if API key is not configured
     if (!apiKey) {
       return NextResponse.json({
+        merchant: "Nhà hàng Phố Biển",
+        totalAmount: 462000,
         items: [
-          { name: "Lẩu Thái hải sản", price: 350000 },
-          { name: "Bia Tiger (x4)", price: 80000 },
-          { name: "Khăn lạnh (x4)", price: 12000 },
-          { name: "Đậu phộng rang", price: 20000 },
+          { name: "Lẩu Thái hải sản", quantity: 1, unitPrice: 350000, totalPrice: 350000 },
+          { name: "Bia Tiger", quantity: 4, unitPrice: 20000, totalPrice: 80000 },
+          { name: "Khăn lạnh", quantity: 4, unitPrice: 3000, totalPrice: 12000 },
+          { name: "Đậu phộng rang", quantity: 1, unitPrice: 20000, totalPrice: 20000 },
         ]
       });
     }
@@ -37,12 +39,28 @@ export async function POST(req: NextRequest) {
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const mimeType = imageBase64.split(';')[0].split(':')[1] || "image/jpeg";
 
-    const prompt = `Analyze this receipt image and extract all the ordered line items.
-Return ONLY a valid JSON array of objects, where each object has exactly two properties:
-- "name": The name of the item (string, Vietnamese)
-- "price": The total price of that item row (number, without currency symbols, dots, or commas. E.g. 120000).
-Ignore totals, subtotals, tax, and discount rows. Only extract actual purchased items.
-Do not include markdown formatting like \`\`\`json. Return just the raw array.`;
+    const prompt = `Analyze this receipt image and extract details.
+Return ONLY a valid JSON object with this exact structure:
+{
+  "merchant": "string (Vietnamese)",
+  "totalAmount": number (total amount paid),
+  "subtotal": number | null,
+  "tax": number | null,
+  "serviceCharge": number | null,
+  "items": [
+    {
+      "name": "string (Vietnamese)",
+      "quantity": number,
+      "unitPrice": number,
+      "totalPrice": number
+    }
+  ]
+}
+Notes:
+- "unitPrice" and "totalPrice" must be numbers (no currency symbols, dots, or commas).
+- If an item doesn't have a quantity explicitly, assume 1.
+- Ensure "totalAmount" is correctly identified from the receipt.
+Do not include markdown formatting like \`\`\`json. Return just the raw JSON object.`;
 
     const result = await model.generateContent([
       prompt,
@@ -58,18 +76,25 @@ Do not include markdown formatting like \`\`\`json. Return just the raw array.`;
     
     // Clean up potential markdown formatting from Gemini's response
     let cleanedText = responseText;
-    if (cleanedText.startsWith("```json")) {
-      cleanedText = cleanedText.substring(7);
-    } else if (cleanedText.startsWith("```")) {
-      cleanedText = cleanedText.substring(3);
-    }
-    if (cleanedText.endsWith("```")) {
-      cleanedText = cleanedText.substring(0, cleanedText.length - 3);
+    if (cleanedText.includes("```")) {
+      const match = cleanedText.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
+      if (match && match[1]) {
+        cleanedText = match[1];
+      }
     }
 
     try {
-      const items = JSON.parse(cleanedText.trim());
-      return NextResponse.json({ items });
+      const data = JSON.parse(cleanedText.trim());
+      // Ensure data has the required structure even if AI fails slightly
+      const sanitized = {
+        merchant: data.merchant || "Hóa đơn mới",
+        totalAmount: data.totalAmount || 0,
+        subtotal: data.subtotal || null,
+        tax: data.tax || null,
+        serviceCharge: data.serviceCharge || null,
+        items: Array.isArray(data.items) ? data.items : []
+      };
+      return NextResponse.json(sanitized);
     } catch (parseError) {
       console.error("JSON Parse Error:", parseError, "Raw Response:", responseText);
       return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });

@@ -19,7 +19,9 @@ interface Member {
 
 interface OCRItem {
   name: string;
-  price: number;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
   selectedMembers: string[];
 }
 
@@ -125,16 +127,16 @@ export default function AddBillForm({
           const data = await res.json();
           
           if (data.items && Array.isArray(data.items)) {
-            const newOcrItems = data.items.map((item: { name: string, price: number }) => ({
-              name: item.name,
-              price: item.price,
+            const newOcrItems = data.items.map((item: any) => ({
+              ...item,
               selectedMembers: selectedParticipants // Default to all selected participants
             }));
             setOcrItems(newOcrItems);
             
-            const sum = data.items.reduce((acc: number, item: { price: number }) => acc + item.price, 0);
-            setTotalAmount(sum);
-            if (!description) setDescription("Hóa đơn từ AI");
+            setTotalAmount(data.totalAmount || 0);
+            if (!description || description === "Hóa đơn từ AI") {
+              setDescription(data.merchant || "Hóa đơn từ AI");
+            }
             
             // Switch to custom split and calculate based on OCR immediately
             setSplitType("custom");
@@ -143,7 +145,7 @@ export default function AddBillForm({
             
             newOcrItems.forEach((item: OCRItem) => {
               if (item.selectedMembers.length > 0) {
-                const splitPrice = item.price / item.selectedMembers.length;
+                const splitPrice = item.totalPrice / item.selectedMembers.length;
                 item.selectedMembers.forEach((id: string) => {
                   newAmounts[id] += splitPrice;
                 });
@@ -189,7 +191,7 @@ export default function AddBillForm({
     
     newItems.forEach((i: OCRItem) => {
       if (i.selectedMembers.length > 0) {
-        const splitPrice = i.price / i.selectedMembers.length;
+        const splitPrice = i.totalPrice / i.selectedMembers.length;
         i.selectedMembers.forEach(id => {
           newAmounts[id] += splitPrice;
         });
@@ -316,8 +318,13 @@ export default function AddBillForm({
               {ocrItems.map((item, idx) => (
                 <Card key={idx} className="p-4 space-y-3">
                   <div className="flex justify-between items-start">
-                    <span className="font-bold text-slate-900 leading-tight flex-1 pr-4">{item.name}</span>
-                    <span className="font-black text-indigo-600 shrink-0">₫{item.price.toLocaleString()}</span>
+                    <div className="flex-1 pr-4">
+                      <p className="font-bold text-slate-900 leading-tight">{item.name}</p>
+                      <p className="text-[10px] text-slate-400 font-bold mt-1">
+                        {item.quantity} x ₫{item.unitPrice.toLocaleString()}
+                      </p>
+                    </div>
+                    <span className="font-black text-indigo-600 shrink-0">₫{item.totalPrice.toLocaleString()}</span>
                   </div>
                   <div className="pt-2 border-t border-slate-50">
                     <p className="text-[10px] uppercase font-bold text-slate-400 mb-2 tracking-widest">Ai đã dùng món này?</p>
