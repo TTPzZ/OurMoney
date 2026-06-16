@@ -97,16 +97,27 @@ Do not include markdown.`;
     }
 
   } catch (error: any) {
-    console.error("OCR API Error:", error);
+    const errorDetails = error?.message || "Lỗi không xác định";
+    const statusCode = error?.status || 500;
     
-    // Check for Quota Exceeded (429) - specifically for Free Tier
-    const errorMessage = error?.message || "";
-    if (error?.status === 429 || errorMessage.includes("429") || errorMessage.includes("Quota exceeded")) {
+    console.error(`[OCR AI Error] Status: ${statusCode}, Message: ${errorDetails}`);
+    
+    // Specific check for model not found
+    if (errorDetails.includes("not found") || statusCode === 404) {
       return NextResponse.json({ 
-        error: "Bạn đã dùng hết lượt AI miễn phí của hôm nay. Vui lòng đợi 1 phút hoặc thử lại vào ngày mai." 
+        error: `Model AI 'gemini-2.5-flash' không tồn tại hoặc chưa được hỗ trợ cho Key này. Lỗi: ${errorDetails}` 
+      }, { status: 404 });
+    }
+
+    // Check for Quota Exceeded (429)
+    if (statusCode === 429 || errorDetails.includes("429") || errorDetails.includes("Quota exceeded")) {
+      return NextResponse.json({ 
+        error: `Hết hạn mức AI (Quota Exceeded). Google báo: "${errorDetails}". Hãy đợi 1 phút hoặc thử lại.` 
       }, { status: 429 });
     }
 
-    return NextResponse.json({ error: "Lỗi trong quá trình xử lý ảnh bằng AI." }, { status: 500 });
+    return NextResponse.json({ 
+      error: `Lỗi AI: ${errorDetails}` 
+    }, { status: statusCode });
   }
 }
