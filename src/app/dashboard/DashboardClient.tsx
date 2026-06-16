@@ -34,24 +34,35 @@ export default function DashboardClient({
   useEffect(() => {
     if (!groups?.length) return;
 
-    groups.slice(0, 5).forEach((group) => {
-      const key = `/api/groups/${group._id}`;
-      if (!cache.get(key)) {
-        mutate(key, fetcher(key), {
-          revalidate: false,
-          populateCache: true,
-        });
-      }
-    });
-  }, [groups, mutate, cache]);
+    const preloadeable = groups.slice(0, 5).filter(group => !cache.get(`/api/groups/${group._id}`));
+    if (preloadeable.length === 0) return;
 
-  const handlePrefetch = (groupId: string) => {
-    const key = `/api/groups/${groupId}`;
-    if (!cache.get(key)) {
-      mutate(key, fetcher(key), {
+    console.log(`[Preload] Start - Loading ${preloadeable.length} groups`);
+    const startAll = Date.now();
+
+    Promise.all(preloadeable.map(async (group) => {
+      const key = `/api/groups/${group._id}`;
+      const start = Date.now();
+      await mutate(key, fetcher(key), {
         revalidate: false,
         populateCache: true,
       });
+      console.log(`[Preload] Group ${group.name} (${group._id}) loaded in ${Date.now() - start}ms`);
+    })).then(() => {
+      console.log(`[Preload] Finished in ${Date.now() - startAll}ms`);
+    });
+  }, [groups, mutate, cache]);
+
+  const handlePrefetch = async (groupId: string) => {
+    const key = `/api/groups/${groupId}`;
+    if (!cache.get(key)) {
+      console.log(`[Preload] Manual prefetch start: ${groupId}`);
+      const start = Date.now();
+      await mutate(key, fetcher(key), {
+        revalidate: false,
+        populateCache: true,
+      });
+      console.log(`[Preload] Manual prefetch finished: ${groupId} in ${Date.now() - start}ms`);
     }
   };
 

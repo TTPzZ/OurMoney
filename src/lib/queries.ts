@@ -33,11 +33,16 @@ export async function getGroupsForUser(userId: string) {
 }
 
 export async function getGroupByIdForUser(groupId: string, userId: string): Promise<GroupDetail | null> {
+  const start = Date.now();
   await connectDB();
   const group = await Group.findById(groupId)
     .populate("members", USER_PUBLIC_SELECT)
     .select("name members createdBy inviteCode")
     .lean() as unknown as PopulatedGroupForUser | null;
+  
+  const duration = Date.now() - start;
+  console.log(`[Query] getGroupByIdForUser ${duration}ms`);
+
   if (!group) return null;
   // Ensure user is member
   const isMember = group.members.some((m) => m._id.toString() === userId);
@@ -50,6 +55,7 @@ export async function getGroupByIdForUser(groupId: string, userId: string): Prom
 }
 
 export async function getBillsByGroupId(groupId: string): Promise<BillWithPayer[]> {
+  const start = Date.now();
   await connectDB();
   const bills = await Bill.find({ groupId })
     .populate("paidBy", USER_PUBLIC_SELECT)
@@ -57,6 +63,10 @@ export async function getBillsByGroupId(groupId: string): Promise<BillWithPayer[
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
+  
+  const duration = Date.now() - start;
+  console.log(`[Query] getBillsByGroupId ${duration}ms`);
+
   return serialize(
     bills.map((bill) => ({
       ...bill,
@@ -66,12 +76,17 @@ export async function getBillsByGroupId(groupId: string): Promise<BillWithPayer[
 }
 
 export async function getSettlementsByGroupId(groupId: string): Promise<SettlementData[]> {
+  const start = Date.now();
   await connectDB();
   const settlements = await Settlement.find({ groupId })
     .populate('from', USER_PUBLIC_SELECT)
     .populate('to', USER_PUBLIC_SELECT)
     .select("from to amount status paidAt completedAt")
     .lean();
+  
+  const duration = Date.now() - start;
+  console.log(`[Query] getSettlementsByGroupId ${duration}ms`);
+
   return serialize(
     settlements.map((settlement) => ({
       ...settlement,
