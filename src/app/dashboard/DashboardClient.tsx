@@ -19,10 +19,12 @@ export default function DashboardClient({
   initialGroups,
   user,
   onOpenGroup,
+  onOpenProfile,
 }: {
   initialGroups: GroupListItem[];
   user: PublicUser;
   onOpenGroup: (groupId: string) => void;
+  onOpenProfile: () => void;
 }) {
   const { cache, mutate } = useSWRConfig();
   const { user: currentUser } = useCurrentUser(user);
@@ -66,6 +68,11 @@ export default function DashboardClient({
     onOpenGroup(groupId);
   };
 
+  const handleOpenProfile = (e: React.MouseEvent) => {
+    e.preventDefault();
+    onOpenProfile();
+  };
+
   return (
     <main className="min-h-screen bg-slate-50 flex flex-col items-center p-6 pb-24 w-full">
       <div className="w-full max-w-md flex justify-between items-center mb-8 pt-4">
@@ -75,7 +82,11 @@ export default function DashboardClient({
             Xin chào, {currentUser?.name?.split(" ")[0]}! 👋
           </p>
         </div>
-        <Link href="/profile" className="relative active:scale-90 transition-transform">
+        <Link 
+          href="/profile" 
+          onClick={handleOpenProfile}
+          className="relative active:scale-90 transition-transform"
+        >
           <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-xl bg-slate-200">
             <Avatar src={currentUser?.image} name={currentUser?.name || "U"} size={48} />
           </div>

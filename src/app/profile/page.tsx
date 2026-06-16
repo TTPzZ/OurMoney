@@ -2,11 +2,8 @@ import { auth, signOut } from "@/auth";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { ChevronLeft, LogOut } from "lucide-react";
-import type { PublicUser } from "@/lib/current-user";
 import ProfileClient from "./ProfileClient";
 import { SessionProvider } from "next-auth/react";
-import connectDB from "@/lib/db";
-import User, { IUser } from "@/models/User";
 
 export const preferredRegion = "sin1";
 
@@ -14,31 +11,28 @@ export default async function ProfilePage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
 
-  await connectDB();
-  const dbUser = await User.findById(session.user.id).lean() as IUser | null;
-  if (!dbUser) redirect("/");
+  // We don't wait for DB here anymore to make it instant.
+  // ProfileClient will handle the cache-first loading of full data.
+  const userFallback = {
+    _id: session.user.id,
+    name: session.user.name || "",
+    image: session.user.image || undefined,
+    email: session.user.email || undefined,
+  };
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4">
       {/* Header */}
       <div className="w-full max-w-md flex justify-between items-center mb-8 pt-4">
-        <Link href="/dashboard" className="p-2 bg-white rounded-xl shadow-sm border border-gray-100 text-gray-500">
+        <Link href="/dashboard" className="p-2 bg-white rounded-xl shadow-sm border border-gray-100 text-gray-500 active:scale-95 transition-transform">
           <ChevronLeft size={24} />
         </Link>
-        <h1 className="text-xl font-bold text-gray-900">Cấu hình tài khoản</h1>
+        <h1 className="text-xl font-bold text-gray-900 tracking-tight">Hồ sơ cá nhân</h1>
         <div className="w-10"></div>
       </div>
 
       <SessionProvider session={session}>
-        <ProfileClient 
-          initialUser={{
-            _id: session.user.id,
-            name: dbUser.customName || dbUser.name || "",
-            image: dbUser.customImage || dbUser.image || undefined,
-            email: dbUser.email || undefined,
-          } satisfies PublicUser}
-          hasGeminiKey={!!dbUser.geminiApiKey}
-        />
+        <ProfileClient initialUser={userFallback} />
       </SessionProvider>
 
       <div className="w-full max-w-md mt-6">

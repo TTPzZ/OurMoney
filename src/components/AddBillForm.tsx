@@ -515,7 +515,8 @@ export default function AddBillForm({
         totalAmount: Number(totalAmount),
         paidBy,
         splits,
-        scanSource
+        scanSource,
+        imageUrl: billImage || undefined
       });
 
       if (onSuccess) {

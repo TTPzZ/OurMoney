@@ -1,4 +1,4 @@
-export type MoneyShellView = "dashboard" | "group";
+export type MoneyShellView = "dashboard" | "group" | "profile";
 
 export interface MoneyShellState {
   view: MoneyShellView;
@@ -15,6 +15,13 @@ export function getMoneyViewFromPathname(pathname: string): MoneyShellState {
     };
   }
 
+  if (firstSegment === "profile") {
+    return {
+      view: "profile",
+      selectedGroupId: null,
+    };
+  }
+
   return {
     view: "dashboard",
     selectedGroupId: null,
@@ -23,6 +30,10 @@ export function getMoneyViewFromPathname(pathname: string): MoneyShellState {
 
 export function getDashboardPath() {
   return "/dashboard";
+}
+
+export function getProfilePath() {
+  return "/profile";
 }
 
 export function getGroupPath(groupId: string) {

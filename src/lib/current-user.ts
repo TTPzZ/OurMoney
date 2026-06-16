@@ -7,6 +7,7 @@ export interface PublicUser {
   customImage?: string;
   googleName?: string;
   googleImage?: string;
+  hasGeminiKey?: boolean;
 }
 
 export interface GoogleProfileFields {
@@ -34,11 +35,12 @@ export interface PublicUserDocument {
   googleImage?: string | null;
   customName?: string | null;
   customImage?: string | null;
+  geminiApiKey?: string | null;
   updatedAt?: Date | string | number | null;
   createdAt?: Date | string | number | null;
 }
 
-export const USER_PUBLIC_SELECT = "name image googleName googleImage customName customImage createdAt updatedAt";
+export const USER_PUBLIC_SELECT = "name image googleName googleImage customName customImage geminiApiKey createdAt updatedAt";
 
 export function buildExistingGoogleUserPatch(
   existingUser: StoredGoogleUserFields,
@@ -114,6 +116,7 @@ export function toPublicUser(user: PublicUserDocument): PublicUser {
     customImage,
     googleName: user.googleName || undefined,
     googleImage: user.googleImage || undefined,
+    hasGeminiKey: !!user.geminiApiKey,
   };
 }
 

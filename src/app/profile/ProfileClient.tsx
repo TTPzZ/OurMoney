@@ -14,24 +14,23 @@ import { updateGeminiKey } from "@/lib/actions/user";
 
 export default function ProfileClient({
   initialUser,
-  hasGeminiKey: initialHasGeminiKey,
 }: {
   initialUser: PublicUser;
-  hasGeminiKey: boolean;
 }) {
   const { update } = useSession();
   const { mutate } = useSWRConfig();
   const { user } = useCurrentUser(initialUser);
-  const [name, setName] = useState(initialUser.name);
-  const [image, setImage] = useState(initialUser.image || "");
+  const [name, setName] = useState(user?.name || initialUser.name);
+  const [image, setImage] = useState(user?.image || initialUser.image || "");
   const [imageChanged, setImageChanged] = useState(false);
   const [geminiKey, setGeminiKey] = useState("");
-  const [hasGeminiKey, setHasGeminiKey] = useState(initialHasGeminiKey);
+  const [hasGeminiKey, setHasGeminiKey] = useState(user?.hasGeminiKey || initialUser.hasGeminiKey || false);
   const [isPending, startTransition] = useTransition();
 
   const syncProfileCaches = async (nextUser: PublicUser) => {
     setName(nextUser.name);
     setImage(nextUser.image || "");
+    setHasGeminiKey(nextUser.hasGeminiKey || false);
     setImageChanged(false);
 
     await update({ name: nextUser.name, image: nextUser.image });
@@ -64,10 +63,9 @@ export default function ProfileClient({
 
   useEffect(() => {
     if (!user || isPending) return;
-    // Sync the editable form after /api/me replaces the session fallback.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setName(user.name);
     setImage(user.image || "");
+    setHasGeminiKey(user.hasGeminiKey || false);
     setImageChanged(false);
   }, [user, isPending]);
 
