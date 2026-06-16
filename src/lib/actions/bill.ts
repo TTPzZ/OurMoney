@@ -13,6 +13,7 @@ export async function createBill(
     paidBy: string;
     splits: { userId: string; amount: number }[];
     scanSource?: 'ocr' | 'ai' | null;
+    imageUrl?: string;
   }
 ) {
   const session = await auth();
@@ -32,6 +33,7 @@ export async function createBill(
     paidBy: data.paidBy,
     splits: data.splits,
     scanSource: data.scanSource,
+    imageUrl: data.imageUrl,
   });
 
   return JSON.parse(JSON.stringify(
@@ -52,6 +54,7 @@ export async function getBillsByGroupId(groupId: string) {
 
   const bills = await Bill.find({ groupId })
     .populate("paidBy", USER_PUBLIC_SELECT)
+    .populate("splits.userId", USER_PUBLIC_SELECT)
     .sort({ createdAt: -1 })
     .lean();
 
@@ -59,6 +62,10 @@ export async function getBillsByGroupId(groupId: string) {
     bills.map((bill) => ({
       ...bill,
       paidBy: toPublicUser(bill.paidBy as unknown as PublicUserDocument),
+      splits: bill.splits.map((split: any) => ({
+        ...split,
+        userId: toPublicUser(split.userId as unknown as PublicUserDocument),
+      })),
     })),
   ));
 }

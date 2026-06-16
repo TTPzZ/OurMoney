@@ -1,5 +1,17 @@
+import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Avatar from "@/components/Avatar";
+import { X, Receipt, Users, CreditCard } from "lucide-react";
+import Card from "@/components/ui/Card";
+
+interface BillSplit {
+  userId: {
+    _id: string;
+    name: string;
+    image?: string;
+  };
+  amount: number;
+}
 
 interface Bill {
   _id: string;
@@ -10,11 +22,15 @@ interface Bill {
     name: string;
     image?: string;
   };
+  splits: BillSplit[];
+  imageUrl?: string;
   scanSource?: 'ocr' | 'ai' | null;
   createdAt: string;
 }
 
 export default function BillList({ bills }: { bills: Bill[] }) {
+  const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
+
   if (bills.length === 0) {
     return null;
   }
@@ -24,7 +40,8 @@ export default function BillList({ bills }: { bills: Bill[] }) {
       {bills.map((bill) => (
         <div
           key={bill._id}
-          className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between"
+          onClick={() => setSelectedBill(bill)}
+          className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
         >
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 shrink-0">
@@ -58,6 +75,110 @@ export default function BillList({ bills }: { bills: Bill[] }) {
           </div>
         </div>
       ))}
+
+      {/* Bill Detail Modal */}
+      {selectedBill && (
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div 
+            className="w-full max-w-md bg-slate-50 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 duration-300"
+            style={{ maxHeight: '90vh' }}
+          >
+            {/* Modal Header */}
+            <div className="p-6 bg-white border-b border-slate-100 flex justify-between items-center">
+              <div>
+                <h2 className="text-xl font-black text-slate-900">Chi tiết hóa đơn</h2>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                  {formatDistanceToNow(new Date(selectedBill.createdAt))} ago
+                </p>
+              </div>
+              <button 
+                onClick={() => setSelectedBill(null)}
+                className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 active:scale-90 transition-transform"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto p-6 space-y-6" style={{ maxHeight: 'calc(90vh - 100px)' }}>
+              {/* Summary Card */}
+              <Card className="p-5 bg-white border-none shadow-sm space-y-4">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-indigo-50 rounded-2xl flex items-center justify-center text-indigo-600 shrink-0">
+                    <Receipt size={24} />
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Nội dung</p>
+                    <p className="text-lg font-bold text-slate-900">{selectedBill.description}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-4 pt-4 border-t border-slate-50">
+                  <div className="w-12 h-12 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-600 shrink-0 font-black text-xl">
+                    ₫
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Tổng số tiền</p>
+                    <p className="text-2xl font-black text-slate-900">₫{selectedBill.totalAmount.toLocaleString()}</p>
+                  </div>
+                </div>
+              </Card>
+
+              {/* Bill Image View */}
+              {selectedBill.imageUrl && (
+                <div className="space-y-3">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                    <CreditCard size={14} /> Ảnh hóa đơn
+                  </p>
+                  <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-200">
+                    <img 
+                      src={selectedBill.imageUrl} 
+                      alt="Bill" 
+                      className="w-full h-auto max-h-80 object-contain"
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Paid By & Splits */}
+              <div className="space-y-4">
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
+                  <Users size={14} /> Phân chia chi phí
+                </p>
+                
+                <div className="space-y-2">
+                  {/* Payer */}
+                  <div className="flex items-center justify-between p-4 bg-indigo-600 rounded-2xl shadow-lg shadow-indigo-100">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full border-2 border-white/30 overflow-hidden">
+                        <Avatar src={selectedBill.paidBy.image} name={selectedBill.paidBy.name} size={40} />
+                      </div>
+                      <div>
+                        <p className="text-[9px] font-bold text-indigo-200 uppercase tracking-widest">Người trả tiền</p>
+                        <p className="font-bold text-white text-sm">{selectedBill.paidBy.name}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs font-black text-white">₫{selectedBill.totalAmount.toLocaleString()}</p>
+                    </div>
+                  </div>
+
+                  {/* Splits */}
+                  <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
+                    {selectedBill.splits.map((split, idx) => (
+                      <div key={idx} className="flex items-center justify-between p-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar src={split.userId.image} name={split.userId.name} size={32} />
+                          <span className="font-bold text-slate-700 text-sm">{split.userId.name}</span>
+                        </div>
+                        <span className="font-black text-slate-900 text-sm">₫{split.amount.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

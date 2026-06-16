@@ -18,7 +18,7 @@ interface Member {
   image?: string | null;
 }
 
-interface OCRItem {
+export interface OCRItem {
   name: string;
   quantity: number;
   unitPrice: number;
@@ -26,44 +26,135 @@ interface OCRItem {
   selectedMembers: string[];
 }
 
-function parseRawText(text: string) {
+export function parseRawText(text: string) {
   const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
   let totalAmount = 0;
-  const items: any[] = [];
+  let items: any[] = [];
   let merchant = "Hóa đơn mới";
+  let maxConfidence = 0;
 
-  if (lines.length > 0) merchant = lines[0];
-
-  const totalPatterns = [
-    /(?:TỔNG|TONG|TOTAL|THANH TOAN|CỘNG|CONG)[:\s]+([\d.,]+)/i,
-    /([\d.,]+)\s*(?:VNĐ|VND|Đ|D)/i,
+  // 1. TỪ KHÓA TỔNG (Fuzzy & Multilingual)
+  const totalKeywords = [
+    "TỔNG", "TONG", "TNG", "TÔNG", "T0NG", "TOTAL", "TOTL", "T0TAL", "TTAL", "SUM", 
+    "THANH TOAN", "THANH TUAN", "TTAN", "CỘNG", "CONG", "SỐ TIỀN", "SO TIN", 
+    "TỔNG TIỀN", "TNG TIN", "TỔNG CỘNG", "TIỀN MẶT", "TIEN MAT", "CASH", "TM", "GIAO DỊCH"
+  ];
+  
+  // 2. TỪ KHÓA RÁC (Phone, Date, ID, etc.)
+  const ignoreKeywords = [
+    "NGÀY", "DATE", "TIME", "GIỜ", "HOTLINE", "TEL", "ĐIỆN THOẠI", "PHONE", "MOBILE", "SDT", "SĐT", "CALL",
+    "MÃ HD", "MA HD", "SỐ HD", "BILL NO", "INV", "MÃ VẠCH", "BÀN", "TABLE", "KHÁCH", "GUEST",
+    "CHỈ SỐ", "TIÊU THỤ", "M3", "ĐỊNH MỨC", "ĐƠN GIÁ", "VAT", "THUẾ", "PHÍ", "LIÊN HỆ", "CONTACT", "CSKH"
   ];
 
-  for (const line of lines) {
-    for (const pattern of totalPatterns) {
-      const match = line.match(pattern);
-      if (match) {
-        const value = parseInt(match[1].replace(/[.,]/g, ''));
-        if (value > totalAmount) totalAmount = value;
+  interface Candidate {
+    value: number;
+    score: number;
+    lineIdx: number;
+  }
+  const candidates: Candidate[] = [];
+  const rawItems: any[] = [];
+
+  // Regex nhận diện SĐT Việt Nam
+  const phoneRegex = /(?:0|\+84|1900|1800)(?:\s?\d){7,10}/g;
+
+  lines.forEach((line, idx) => {
+    const originalUpperLine = line.toUpperCase();
+    // Chuẩn hóa nhẹ để so khớp keyword (ví dụ: TÔNG -> TỔNG, TIN -> TIỀN)
+    const upperLine = originalUpperLine
+      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Bỏ dấu
+      .replace(/0/g, 'O'); 
+    
+    // 1. DÒ TÌM SỐ TIỀN
+    const amountMatch = line.match(/([\d.,\s]{4,})\s*(?:VNĐ|VND|Đ|D|TIN|TÌN|₫)?$/i) || 
+                        line.match(/(?:VNĐ|VND|Đ|D|₫)\s*([\d.,\s]{4,})/i);
+    
+    if (amountMatch) {
+      const valStr = amountMatch[1].trim();
+      const value = parseInt(valStr.replace(/[.,\s]/g, ''));
+      
+      const isPhoneLike = phoneRegex.test(line.replace(/[.\-\s]/g, ''));
+      const isDatePart = line.includes(`/${valStr}`) || line.includes(`-${valStr}`) || line.includes(`${valStr}/`);
+
+      if (!isNaN(value) && value >= 5000 && value < 100000000 && !isDatePart) {
+        let score = 0;
+        
+        // CỘNG ĐIỂM CHIẾN THUẬT
+        const hasTotalKeyword = totalKeywords.some(k => originalUpperLine.includes(k) || upperLine.includes(k));
+        
+        if (hasTotalKeyword) score += 300; // Bonus cực lớn cho từ khóa Tổng
+        
+        // Vị trí: Ưu tiên 20% cuối hóa đơn (nơi thường đặt tổng tiền)
+        const positionFactor = idx / lines.length;
+        if (positionFactor > 0.8) score += 150;
+        else if (positionFactor > 0.5) score += 50;
+
+        // Định dạng: Số có dấu phân cách (1.000.000) tin cậy hơn số viết liền (700928)
+        if (valStr.includes(".") || valStr.includes(",") || valStr.includes(" ")) score += 100;
+        
+        if (line.includes("₫") || line.toLowerCase().endsWith("đ") || line.toLowerCase().endsWith("d")) score += 80;
+
+        // TRỪ ĐIỂM (Rác)
+        if (ignoreKeywords.some(k => originalUpperLine.includes(k))) score -= 300; 
+        if (isPhoneLike) score -= 500;
+        if (valStr.length >= 10) score -= 400; 
+        if (value >= 2020 && value <= 2030) score -= 400;
+        if (line.includes("/") || (line.includes("-") && !hasTotalKeyword) || line.includes(":")) score -= 150;
+
+        candidates.push({ value, score, lineIdx: idx });
       }
     }
 
-    const itemMatch = line.match(/^(.+?)\s+([\d.,]+)$/);
+    // 2. DÒ TÌM MÓN (ITEM)
+    const itemMatch = line.match(/^(.+?)(?:\s+[\d.,]{4,})?\s+([\d., ]{4,})\s*(?:VNĐ|VND|Đ|D|₫)?$/i);
     if (itemMatch) {
       const name = itemMatch[1].trim();
-      const price = parseInt(itemMatch[2].replace(/[.,]/g, ''));
-      if (price > 1000 && price < totalAmount && !line.toLowerCase().includes('tổng')) {
-        items.push({
-          name,
-          quantity: 1,
-          unitPrice: price,
-          totalPrice: price
-        });
+      const price = parseInt(itemMatch[2].replace(/[.,\s]/g, ''));
+      
+      const isBadItem = ignoreKeywords.some(k => name.toUpperCase().includes(k)) || 
+                        name.toUpperCase().includes("M3") || 
+                        phoneRegex.test(name.replace(/[.\-\s]/g, '')) ||
+                        name.length < 3;
+
+      if (price >= 1000 && !isBadItem && !totalKeywords.some(k => name.toUpperCase().includes(k))) {
+        rawItems.push({ name, price, lineIdx: idx });
       }
     }
+  });
+
+  // Chọn ứng viên có điểm cao nhất
+  candidates.sort((a, b) => b.score - a.score);
+  if (candidates.length > 0) {
+    totalAmount = candidates[0].value;
+    maxConfidence = candidates[0].score;
   }
 
-  return { merchant, totalAmount, items };
+  // 3. LỌC ITEMS
+  items = rawItems
+    .filter(it => it.price < totalAmount && it.lineIdx !== candidates[0]?.lineIdx)
+    .map(it => ({
+      name: it.name,
+      quantity: 1,
+      unitPrice: it.price,
+      totalPrice: it.price
+    }));
+
+  // 4. XÁC ĐỊNH MERCHANT
+  if (lines.length > 0) {
+    const companyLine = lines.find(l => 
+      l.toUpperCase().includes("CÔNG TY") || 
+      l.toUpperCase().includes("CẤP NƯỚC") ||
+      l.toUpperCase().includes("CHI NHÁNH") ||
+      l.toUpperCase().includes("NHÀ HÀNG") ||
+      l.toUpperCase().includes("COFFEE") ||
+      l.toUpperCase().includes("QUÁN") ||
+      l.toUpperCase().includes("GIA ĐỊNH")
+    );
+    merchant = companyLine ? companyLine.replace(/[:\-]/g, "").trim() : lines[0];
+    if (merchant.length > 50) merchant = merchant.substring(0, 50) + "...";
+  }
+
+  return { merchant, totalAmount, items, confidence: maxConfidence + (items.length * 10) };
 }
 
 enum OCRFailureReason {
@@ -81,10 +172,10 @@ const OCR_FAILURE_MESSAGES: Record<OCRFailureReason, string> = {
 };
 
 /**
- * Tiền xử lý ảnh để tối ưu hóa cho Tesseract OCR
- * Bao gồm: Grayscale, Tăng tương phản và Binarization
+ * Tiền xử lý ảnh nâng cao cho Tesseract OCR
+ * Sử dụng Adaptive Thresholding (Ngưỡng thích nghi) để tự động xử lý đổ bóng và ánh sáng không đều
  */
-const preprocessImage = (file: File): Promise<string> => {
+export const preprocessImage = (file: File, manualThreshold: number = 0): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -94,7 +185,6 @@ const preprocessImage = (file: File): Promise<string> => {
         const ctx = canvas.getContext("2d");
         if (!ctx) return reject(new Error("Không thể khởi tạo canvas context"));
 
-        // Giới hạn kích thước ảnh để xử lý nhanh hơn và tránh lỗi bộ nhớ
         const MAX_DIM = 2000;
         let width = img.width;
         let height = img.height;
@@ -107,41 +197,76 @@ const preprocessImage = (file: File): Promise<string> => {
         canvas.width = width;
         canvas.height = height;
 
-        // BƯỚC 1: Grayscale & Contrast bằng Filter API (Nhanh)
-        // Tăng contrast giúp chữ đen rõ hơn trên nền trắng
-        ctx.filter = 'grayscale(1) contrast(1.8) brightness(1.1)';
+        // BƯỚC 1: Grayscale và tăng nhẹ Contrast ban đầu
+        ctx.filter = 'grayscale(1) contrast(1.2)';
         ctx.drawImage(img, 0, 0, width, height);
 
-        // BƯỚC 2: Binarization (Ngưỡng hóa) thủ công để tẩy nền
-        // Giúp loại bỏ các watermark mờ và nhiễu nền
         const imageData = ctx.getImageData(0, 0, width, height);
         const data = imageData.data;
-        
-        // Tính toán độ sáng trung bình để có ngưỡng động nhẹ (optional)
-        // Ở đây dùng ngưỡng cố định 145/255 để lọc watermark "GIA DINH WATER"
-        const threshold = 145; 
+        const widthRes = imageData.width;
+        const heightRes = imageData.height;
 
+        // Tạo mảng chứa độ sáng (Grayscale)
+        const grayData = new Uint8Array(widthRes * heightRes);
         for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          
-          // Công thức Luminance chuẩn
-          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-          
-          // Chuyển về trắng hẳn hoặc đen hẳn
-          const v = gray > threshold ? 255 : 0;
-          
-          data[i] = v;     // R
-          data[i + 1] = v; // G
-          data[i + 2] = v; // B
-          // data[i+3] (Alpha) giữ nguyên
+          grayData[i / 4] = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
         }
 
-        ctx.putImageData(imageData, 0, 0);
-        
-        // Trả về dataUrl chất lượng cao cho Tesseract
-        resolve(canvas.toDataURL("image/jpeg", 0.95));
+        // BƯỚC 2: Tính toán Integral Image để tối ưu hóa việc tính trung bình vùng (Moving Average)
+        // Đây là kỹ thuật giúp tính Adaptive Threshold cực nhanh (O(1) cho mỗi pixel)
+        const integral = new Float64Array(widthRes * heightRes);
+        for (let y = 0; y < heightRes; y++) {
+          let sum = 0;
+          for (let x = 0; x < widthRes; x++) {
+            const idx = y * widthRes + x;
+            sum += grayData[idx];
+            if (y === 0) {
+              integral[idx] = sum;
+            } else {
+              integral[idx] = integral[idx - widthRes] + sum;
+            }
+          }
+        }
+
+        // BƯỚC 3: Adaptive Thresholding & Morphological Dilation (Nở ảnh nhẹ)
+        const finalData = new Uint8ClampedArray(grayData.length * 4);
+        const s = Math.floor(widthRes / 16);
+        const t = manualThreshold > 0 ? manualThreshold / 255 : 0.15;
+
+        for (let y = 0; y < heightRes; y++) {
+          for (let x = 0; x < widthRes; x++) {
+            const idx = y * widthRes + x;
+            const x1 = Math.max(0, x - s / 2);
+            const x2 = Math.min(widthRes - 1, x + s / 2);
+            const y1 = Math.max(0, y - s / 2);
+            const y2 = Math.min(heightRes - 1, y + s / 2);
+            
+            const count = (x2 - x1) * (y2 - y1);
+            const sum = integral[Math.floor(y2 * widthRes + x2)] 
+                      - integral[Math.floor(y1 * widthRes + x2)] 
+                      - integral[Math.floor(y2 * widthRes + x1)] 
+                      + integral[Math.floor(y1 * widthRes + x1)];
+            
+            // Ngưỡng hóa
+            let v = (grayData[idx] * count) < (sum * (1.0 - t)) ? 0 : 255;
+            
+            // Dilation nhẹ: Nếu pixel hiện tại là trắng nhưng có hàng xóm là đen, 
+            // ta "nở" pixel đen ra để nối các nét chữ in kim (dotted text)
+            // (Chỉ áp dụng nếu x,y không nằm sát rìa)
+            if (v === 255 && x > 0 && y > 0 && x < widthRes - 1 && y < heightRes - 1) {
+              if (grayData[idx + 1] < 100 || grayData[idx - 1] < 100 || grayData[idx + widthRes] < 100) {
+                 v = 0; // Nở đen
+              }
+            }
+
+            const outIdx = idx * 4;
+            finalData[outIdx] = v;
+            finalData[outIdx + 1] = v;
+            finalData[outIdx + 2] = v;
+            finalData[outIdx + 3] = 255;
+          }
+        }
+        resolve(canvas.toDataURL("image/jpeg", 0.9));
       };
       img.onerror = () => reject(new Error("Lỗi khi tải ảnh"));
       img.src = e.target?.result as string;
@@ -182,6 +307,8 @@ export default function AddBillForm({
   const [scanSource, setScanSource] = useState<'ocr' | 'ai' | null>(null);
   const [ocrProgress, setOcrProgress] = useState(0);
   const [scanStatus, setScanStatus] = useState("");
+  const [billImage, setBillImage] = useState<string | null>(null);
+  const [showScanMenu, setShowScanMenu] = useState(false);
 
   const waitForNextPaint = () => {
     return new Promise<void>((resolve) => {
@@ -236,79 +363,63 @@ export default function AddBillForm({
     setCustomAmounts(prev => ({ ...prev, [id]: val }));
   };
 
-  const handleScanBill = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>, type: 'ocr' | 'ai') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    setShowScanMenu(false);
     setIsScanning(true);
     setOcrProgress(0);
     setScanStatus("Đang chuẩn bị...");
     setError("");
 
-    const startTime = Date.now();
-    console.log(`[OCR CLIENT] Start processing image. Size: ${(file.size / 1024).toFixed(2)} KB`);
-
     try {
-      // 1. Client-Side Tesseract OCR
-      setScanStatus("Đang xử lý ảnh...");
-      const processedImage = await preprocessImage(file);
-      
-      setScanStatus("Đang nhận diện chữ...");
-      const result = await Tesseract.recognize(processedImage, 'vie', {
-        logger: m => {
-          if (m.status === 'recognizing text') {
-            setOcrProgress(Math.round(m.progress * 100));
-          }
-        }
-      });
-
-      const ocrDuration = Date.now() - startTime;
-      const textLength = result.data.text.length;
-      console.log(`[OCR CLIENT] OCR finished in ${ocrDuration}ms. Extracted text length: ${textLength}`);
-      console.log(`[OCR] Text length: ${textLength}`);
-
-      const ocrResult = parseRawText(result.data.text);
-      console.log(`[Parser] Items found: ${ocrResult.items.length}, Total found: ${ocrResult.totalAmount > 0}`);
+      // 1. Tiền xử lý và nén ảnh để lưu trữ (Sử dụng mức nén 0.7 để cân bằng chất lượng/dung lượng)
+      const compressedImg = await preprocessImage(file, 0); 
+      setBillImage(compressedImg);
 
       let finalData = null;
-      let failureReason: OCRFailureReason | null = null;
 
-      // 2. Success check (Total found and at least 1 item)
-      if (textLength === 0) {
-        failureReason = OCRFailureReason.NO_TEXT;
-      } else if (ocrResult.items.length === 0) {
-        failureReason = OCRFailureReason.NO_ITEMS;
-      } else if (ocrResult.totalAmount === 0) {
-        failureReason = OCRFailureReason.NO_TOTAL;
-      }
+      if (type === 'ocr') {
+        const thresholdTries = [0, 130, 170];
+        let bestResult = null;
 
-      if (!failureReason) {
-        finalData = { ...ocrResult, scanSource: 'ocr' };
-        setScanStatus("Đã nhận diện thành công!");
+        for (let i = 0; i < thresholdTries.length; i++) {
+          const currentT = thresholdTries[i];
+          setScanStatus(`Đang quét OCR (Lần ${i + 1})...`);
+          
+          const processedImage = await preprocessImage(file, currentT);
+          const result = await Tesseract.recognize(processedImage, 'vie', {
+            logger: m => {
+              if (m.status === 'recognizing text' && i === 0) {
+                setOcrProgress(Math.round(m.progress * 100));
+              }
+            }
+          });
+
+          const parsed = parseRawText(result.data.text);
+          if (parsed.totalAmount > 0 && parsed.items.length > 0) {
+            bestResult = { ...parsed, scanSource: 'ocr' as const };
+            break;
+          }
+          if (!bestResult || parsed.confidence > (bestResult.confidence || -999)) {
+            bestResult = { ...parsed, scanSource: 'ocr' as const };
+          }
+        }
+        finalData = bestResult;
       } else {
-        // 3. Fallback to Gemini
-        const fallbackMsg = OCR_FAILURE_MESSAGES[failureReason];
-        console.log(`[OCR CLIENT] Local OCR failed: ${failureReason}. Falling back to AI...`);
-        setScanStatus(`${fallbackMsg} \nĐang thử AI OCR...`);
-        
-        const reader = new FileReader();
-        const base64Promise = new Promise<string>((resolve) => {
-          reader.onload = () => resolve(reader.result as string);
-          reader.readAsDataURL(file);
-        });
-
-        const base64 = await base64Promise;
+        // AI OCR
+        setScanStatus("Đang gửi ảnh cho AI...");
         const res = await fetch("/api/ocr", {
           method: "POST",
-          body: JSON.stringify({ imageBase64: base64 }),
+          body: JSON.stringify({ imageBase64: compressedImg }),
         });
 
         const aiData = await res.json();
         if (res.ok) {
-          finalData = aiData;
-          setScanStatus("Đã nhận diện bằng AI OCR ✨");
+          finalData = { ...aiData, scanSource: 'ai' as const };
         } else {
-          throw new Error(aiData.error || "Không thể nhận diện hóa đơn");
+          throw new Error(aiData.error || "AI không thể nhận diện hóa đơn");
         }
       }
 
@@ -320,24 +431,16 @@ export default function AddBillForm({
         setOcrItems(newOcrItems);
         setScanSource(finalData.scanSource || null);
         
-        if (!totalAmount) {
-          setTotalAmount(finalData.totalAmount || 0);
-        }
-        if (!description || description === "" || description === "Hóa đơn từ AI" || description === "Hóa đơn mới") {
+        if (!totalAmount) setTotalAmount(finalData.totalAmount || 0);
+        if (!description || description === "" || description === "Hóa đơn mới" || description === "Hóa đơn từ AI") {
           setDescription(finalData.merchant || "Hóa đơn mới");
         }
 
-        console.log(`[OCR RESULT]
-Source: ${finalData.scanSource === 'ai' ? 'AI' : 'OCR'}
-Reason: ${failureReason || 'SUCCESS'}
-Items: ${finalData.items.length}
-Total: ${finalData.totalAmount}
-Duration: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-        
+        setScanStatus("Đã quét xong!");
         setSplitType("custom");
+        
         const newAmounts: Record<string, number> = {};
         members.forEach(m => newAmounts[m._id] = 0);
-        
         newOcrItems.forEach((item: OCRItem) => {
           if (item.selectedMembers.length > 0) {
             const splitPrice = item.totalPrice / item.selectedMembers.length;
@@ -346,7 +449,6 @@ Duration: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
             });
           }
         });
-        
         Object.keys(newAmounts).forEach(id => {
           newAmounts[id] = Math.round(newAmounts[id]);
         });
@@ -461,18 +563,73 @@ Duration: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
 
       <div className={`w-full ${isModal ? "" : "max-w-md"} space-y-6`}>
         
-        {/* Info Header with AI Button */}
+        {/* Info Header with AI Selection Menu */}
         <div className="flex justify-between items-center px-1">
           <h2 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
             <Receipt size={16} />
             Thông tin hóa đơn
           </h2>
-          <label className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-3 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-transform shadow-sm border border-indigo-100">
-            <Sparkles size={14} className={isScanning ? "animate-spin" : ""} />
-            {isScanning ? (ocrProgress > 0 ? `Đang quét... ${ocrProgress}%` : "Đang chuẩn bị...") : "Quét hóa đơn ✨"}
-            <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanBill} disabled={isScanning} />
-          </label>
+          
+          <div className="relative">
+            <button 
+              onClick={() => setShowScanMenu(!showScanMenu)}
+              disabled={isScanning}
+              className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-xl text-xs font-bold active:scale-95 transition-transform shadow-lg shadow-indigo-200"
+            >
+              <Sparkles size={14} className={isScanning ? "animate-spin" : ""} />
+              {isScanning ? (ocrProgress > 0 ? `Đang quét... ${ocrProgress}%` : "Đang xử lý...") : "Quét hóa đơn ✨"}
+            </button>
+
+            {showScanMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-2xl border border-slate-100 p-2 z-50 animate-in fade-in slide-in-from-top-2">
+                <p className="px-3 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-50 mb-1">Chọn phương thức</p>
+                <label className="flex items-center gap-3 px-3 py-3 hover:bg-slate-50 rounded-xl cursor-pointer transition-colors">
+                  <div className="w-8 h-8 bg-slate-100 rounded-lg flex items-center justify-center text-slate-600">
+                    <Receipt size={16} />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-xs font-bold text-slate-900">Local OCR</p>
+                    <p className="text-[9px] text-slate-400">Nhanh, bảo mật, offline</p>
+                  </div>
+                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileChange(e, 'ocr')} />
+                </label>
+                <label className="flex items-center gap-3 px-3 py-3 hover:bg-indigo-50 rounded-xl cursor-pointer transition-colors">
+                  <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600">
+                    <Sparkles size={16} />
+                  </div>
+                  <div className="flex-1 text-left">
+                    <p className="text-xs font-bold text-indigo-600">Gemini AI</p>
+                    <p className="text-[9px] text-indigo-400">Chính xác nhất, cần mạng</p>
+                  </div>
+                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileChange(e, 'ai')} />
+                </label>
+              </div>
+            )}
+          </div>
         </div>
+
+        {scanStatus && (
+          <div className="bg-indigo-50 border border-indigo-100 p-3 rounded-2xl flex items-center gap-3 animate-pulse">
+            <div className="w-2 h-2 bg-indigo-600 rounded-full animate-ping"></div>
+            <p className="text-[11px] font-bold text-indigo-600">{scanStatus}</p>
+          </div>
+        )}
+
+        {/* Image Preview if available */}
+        {billImage && (
+          <div className="relative group overflow-hidden rounded-2xl border border-slate-100 shadow-sm bg-white p-1">
+            <img src={billImage} alt="Receipt Preview" className="w-full h-32 object-cover rounded-xl grayscale-[0.5] group-hover:grayscale-0 transition-all" />
+            <button 
+              onClick={() => setBillImage(null)}
+              className="absolute top-3 right-3 w-8 h-8 bg-black/50 text-white rounded-full flex items-center justify-center backdrop-blur-md active:scale-90"
+            >
+              ×
+            </button>
+            <div className="absolute bottom-3 left-3 bg-white/90 px-2 py-1 rounded-lg text-[9px] font-bold text-slate-600 backdrop-blur-sm">
+              Đã tải ảnh hóa đơn
+            </div>
+          </div>
+        )}
 
         {/* Step 1: Info */}
         <Card className="p-5 space-y-4">
