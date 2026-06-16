@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Avatar from "@/components/Avatar";
-import { X, Receipt, Users, CreditCard } from "lucide-react";
+import { X, Receipt, Users, CreditCard, ExternalLink, Maximize2 } from "lucide-react";
 import Card from "@/components/ui/Card";
 
 interface BillSplit {
@@ -30,6 +30,7 @@ interface Bill {
 
 export default function BillList({ bills }: { bills: Bill[] }) {
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
+  const [showFullImage, setShowFullImage] = useState(false);
 
   if (bills.length === 0) {
     return null;
@@ -41,7 +42,7 @@ export default function BillList({ bills }: { bills: Bill[] }) {
         <div
           key={bill._id}
           onClick={() => setSelectedBill(bill)}
-          className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer"
+          className="bg-white p-4 rounded-2xl border border-gray-100 shadow-sm flex items-center justify-between active:scale-[0.98] transition-all cursor-pointer group"
         >
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-full overflow-hidden border border-gray-100 shrink-0">
@@ -62,16 +63,24 @@ export default function BillList({ bills }: { bills: Bill[] }) {
                     ✨ AI
                   </span>
                 )}
+                {bill.imageUrl && (
+                  <div className="p-0.5 bg-emerald-50 text-emerald-600 rounded">
+                    <Maximize2 size={8} />
+                  </div>
+                )}
               </div>
               <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
                 Paid by {bill.paidBy.name.split(" ")[0]} • {formatDistanceToNow(new Date(bill.createdAt))} ago
               </p>
             </div>
           </div>
-          <div className="text-right">
+          <div className="text-right flex flex-col items-end gap-1">
             <p className="text-sm font-black text-gray-900">
               ₫{bill.totalAmount.toLocaleString()}
             </p>
+            <div className="text-[8px] font-bold text-indigo-400 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">
+              Bấm để xem chi tiết →
+            </div>
           </div>
         </div>
       ))}
@@ -80,7 +89,7 @@ export default function BillList({ bills }: { bills: Bill[] }) {
       {selectedBill && (
         <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
           <div 
-            className="w-full max-w-md bg-slate-50 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 duration-300"
+            className="w-full max-w-md bg-slate-50 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 duration-300 relative"
             style={{ maxHeight: '90vh' }}
           >
             {/* Modal Header */}
@@ -92,7 +101,10 @@ export default function BillList({ bills }: { bills: Bill[] }) {
                 </p>
               </div>
               <button 
-                onClick={() => setSelectedBill(null)}
+                onClick={() => {
+                  setSelectedBill(null);
+                  setShowFullImage(false);
+                }}
                 className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 active:scale-90 transition-transform"
               >
                 <X size={20} />
@@ -125,16 +137,48 @@ export default function BillList({ bills }: { bills: Bill[] }) {
               {/* Bill Image View */}
               {selectedBill.imageUrl && (
                 <div className="space-y-3">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest px-1 flex items-center gap-2">
-                    <CreditCard size={14} /> Ảnh hóa đơn
-                  </p>
-                  <div className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-200">
+                  <div className="flex justify-between items-center px-1">
+                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                      <CreditCard size={14} /> Ảnh hóa đơn
+                    </p>
+                    <button 
+                      onClick={() => setShowFullImage(true)}
+                      className="text-[10px] font-black text-indigo-600 uppercase flex items-center gap-1 hover:underline"
+                    >
+                      Phóng to <ExternalLink size={10} />
+                    </button>
+                  </div>
+                  <div 
+                    onClick={() => setShowFullImage(true)}
+                    className="rounded-2xl overflow-hidden border border-slate-200 shadow-inner bg-slate-200 cursor-zoom-in relative group"
+                  >
                     <img 
                       src={selectedBill.imageUrl} 
                       alt="Bill" 
-                      className="w-full h-auto max-h-80 object-contain"
+                      className="w-full h-auto max-h-48 object-cover transition-transform group-hover:scale-105"
                     />
+                    <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                      <Maximize2 className="text-white" size={32} />
+                    </div>
                   </div>
+                </div>
+              )}
+
+              {/* Full Image Overlay */}
+              {showFullImage && selectedBill.imageUrl && (
+                <div 
+                  className="fixed inset-0 z-[110] bg-black/90 backdrop-blur-xl flex flex-col items-center justify-center p-4 animate-in zoom-in-95 duration-200"
+                  onClick={() => setShowFullImage(false)}
+                >
+                  <button className="absolute top-6 right-6 w-12 h-12 bg-white/10 text-white rounded-full flex items-center justify-center backdrop-blur-md">
+                    <X size={24} />
+                  </button>
+                  <img 
+                    src={selectedBill.imageUrl} 
+                    alt="Full Bill" 
+                    className="max-w-full max-h-[85vh] object-contain rounded-lg shadow-2xl"
+                  />
+                  <p className="mt-4 text-white/60 text-xs font-bold uppercase tracking-widest">Chạm để đóng</p>
                 </div>
               )}
 
