@@ -13,6 +13,8 @@ import type { PublicUser } from "@/lib/current-user";
 import type { GroupListItem } from "@/lib/money-types";
 import { useCurrentUser } from "@/lib/use-current-user";
 
+const GROUPS_CACHE_KEY = "ourmoney_groups_cache";
+
 export default function DashboardClient({
   initialGroups,
   user,
@@ -24,50 +26,43 @@ export default function DashboardClient({
 }) {
   const { cache, mutate } = useSWRConfig();
   const { user: currentUser } = useCurrentUser(user);
+
+  // Load from localStorage on mount for instant UI
+  const getCachedGroups = () => {
+    if (typeof window === "undefined") return initialGroups;
+    try {
+      const cached = localStorage.getItem(GROUPS_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        return parsed.data || initialGroups;
+      }
+    } catch (e) {
+      console.error("Failed to load groups from cache", e);
+    }
+    return initialGroups;
+  };
+
   const { data } = useSWR<{ groups: GroupListItem[] }>("/api/groups", fetcher, {
-    fallbackData: { groups: initialGroups },
+    fallbackData: { groups: getCachedGroups() },
     revalidateOnMount: true,
+    onSuccess: (newData) => {
+      if (typeof window !== "undefined") {
+        localStorage.setItem(GROUPS_CACHE_KEY, JSON.stringify({
+          data: newData.groups,
+          cachedAt: Date.now()
+        }));
+      }
+    }
   });
 
   const groups = data?.groups || initialGroups;
 
   useEffect(() => {
-    if (!groups?.length) return;
-
-    const preloadeable = groups.slice(0, 5).filter(group => !cache.get(`/api/groups/${group._id}`));
-    if (preloadeable.length === 0) return;
-
-    console.log(`[Preload] Start - Loading ${preloadeable.length} groups`);
-    const startAll = Date.now();
-
-    Promise.all(preloadeable.map(async (group) => {
-      const key = `/api/groups/${group._id}`;
-      const start = Date.now();
-      await mutate(key, fetcher(key), {
-        revalidate: false,
-        populateCache: true,
-      });
-      console.log(`[Preload] Group ${group.name} (${group._id}) loaded in ${Date.now() - start}ms`);
-    })).then(() => {
-      console.log(`[Preload] Finished in ${Date.now() - startAll}ms`);
-    });
-  }, [groups, mutate, cache]);
-
-  const handlePrefetch = async (groupId: string) => {
-    const key = `/api/groups/${groupId}`;
-    if (!cache.get(key)) {
-      console.log(`[Preload] Manual prefetch start: ${groupId}`);
-      const start = Date.now();
-      await mutate(key, fetcher(key), {
-        revalidate: false,
-        populateCache: true,
-      });
-      console.log(`[Preload] Manual prefetch finished: ${groupId} in ${Date.now() - start}ms`);
-    }
-  };
+    // Phase 2: Removed aggressive group detail preload to prevent request storm.
+    // Dashboard should only focus on showing the group list.
+  }, [groups]);
 
   const handleOpenGroup = (groupId: string) => {
-    handlePrefetch(groupId);
     onOpenGroup(groupId);
   };
 

@@ -20,6 +20,8 @@ import { deleteGroup, leaveGroup } from "@/lib/actions/group";
 import { markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
 import type { BillWithPayer, GroupDetailData, GroupMember, Settlement } from "@/lib/money-types";
 
+const getGroupCacheKey = (id: string) => `ourmoney_group_${id}`;
+
 export default function GroupClient({ 
   groupId,
   userId,
@@ -35,17 +37,40 @@ export default function GroupClient({
   const [showMembers, setShowMembers] = useState(false);
   const [showAddBill, setShowAddBill] = useState(false);
   const { mutate: mutateGlobal } = useSWRConfig();
+
+  // Task 3: Cache-First strategy for Group Detail
+  const getCachedData = () => {
+    if (typeof window === "undefined") return initialData;
+    try {
+      const cached = localStorage.getItem(getGroupCacheKey(groupId));
+      if (cached) {
+        return JSON.parse(cached).data || initialData;
+      }
+    } catch (e) {
+      console.error("Failed to load group detail from cache", e);
+    }
+    return initialData;
+  };
+
   const { data, error, mutate, isLoading, isValidating } = useSWR<GroupDetailData>(
     `/api/groups/${groupId}`, 
     fetcher, 
     {
-      fallbackData: initialData,
+      fallbackData: getCachedData(),
       revalidateOnFocus: true,
       dedupingInterval: 5000,
+      onSuccess: (newData) => {
+        if (typeof window !== "undefined") {
+          localStorage.setItem(getGroupCacheKey(groupId), JSON.stringify({
+            data: newData,
+            cachedAt: Date.now()
+          }));
+        }
+      }
     }
   );
 
-  const detail = data || initialData;
+  const detail = data || getCachedData();
 
   const goDashboard = () => {
     if (onBackToDashboard) {
@@ -117,7 +142,15 @@ export default function GroupClient({
 
   const handleBillCreated = async () => {
     // Only await the current group's mutation
-    await mutate();
+    const newData = await mutate();
+    
+    // Task 6: Update local storage cache immediately after bill creation
+    if (newData && typeof window !== "undefined") {
+      localStorage.setItem(getGroupCacheKey(groupId), JSON.stringify({
+        data: newData,
+        cachedAt: Date.now()
+      }));
+    }
     
     // Background refresh for other keys if needed, no await
     mutateGlobal("/api/groups");
