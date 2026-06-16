@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     const aiStart = Date.now();
     
     const genAI = new GoogleGenerativeAI(user.geminiApiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const mimeType = imageBase64.split(';')[0].split(':')[1] || "image/jpeg";

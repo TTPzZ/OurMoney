@@ -66,6 +66,20 @@ function parseRawText(text: string) {
   return { merchant, totalAmount, items };
 }
 
+enum OCRFailureReason {
+  NO_TEXT = "NO_TEXT",
+  NO_ITEMS = "NO_ITEMS",
+  NO_TOTAL = "NO_TOTAL",
+  OCR_ERROR = "OCR_ERROR"
+}
+
+const OCR_FAILURE_MESSAGES: Record<OCRFailureReason, string> = {
+  [OCRFailureReason.NO_TEXT]: "Không phát hiện được chữ trong ảnh. Hãy thử ảnh rõ hơn hoặc dùng Gemini OCR.",
+  [OCRFailureReason.NO_ITEMS]: "Đã đọc được văn bản nhưng không nhận diện được món ăn.",
+  [OCRFailureReason.NO_TOTAL]: "Không tìm thấy tổng tiền trên hóa đơn.",
+  [OCRFailureReason.OCR_ERROR]: "OCR gặp lỗi trong quá trình xử lý ảnh."
+};
+
 export default function AddBillForm({ 
   groupId, 
   members, 
@@ -96,6 +110,7 @@ export default function AddBillForm({
   const [isScanning, setIsScanning] = useState(false);
   const [scanSource, setScanSource] = useState<'ocr' | 'ai' | null>(null);
   const [ocrProgress, setOcrProgress] = useState(0);
+  const [scanStatus, setScanStatus] = useState("");
 
   const waitForNextPaint = () => {
     return new Promise<void>((resolve) => {
@@ -156,6 +171,7 @@ export default function AddBillForm({
 
     setIsScanning(true);
     setOcrProgress(0);
+    setScanStatus("Đang chuẩn bị...");
     setError("");
 
     const startTime = Date.now();
@@ -163,6 +179,7 @@ export default function AddBillForm({
 
     try {
       // 1. Client-Side Tesseract OCR
+      setScanStatus("Đang nhận diện chữ...");
       const result = await Tesseract.recognize(file, 'vie+eng', {
         logger: m => {
           if (m.status === 'recognizing text') {
@@ -172,21 +189,35 @@ export default function AddBillForm({
       });
 
       const ocrDuration = Date.now() - startTime;
-      console.log(`[OCR CLIENT] OCR finished in ${ocrDuration}ms. Extracted text length: ${result.data.text.length}`);
+      const textLength = result.data.text.length;
+      console.log(`[OCR CLIENT] OCR finished in ${ocrDuration}ms. Extracted text length: ${textLength}`);
+      console.log(`[OCR] Text length: ${textLength}`);
 
       const ocrResult = parseRawText(result.data.text);
-      console.log(`[OCR PARSER] Found ${ocrResult.items.length} items. Total: ${ocrResult.totalAmount}`);
+      console.log(`[Parser] Items found: ${ocrResult.items.length}, Total found: ${ocrResult.totalAmount > 0}`);
 
       let finalData = null;
+      let failureReason: OCRFailureReason | null = null;
 
       // 2. Success check (Total found and at least 1 item)
-      if (ocrResult.totalAmount > 0 && ocrResult.items.length > 0) {
+      if (textLength === 0) {
+        failureReason = OCRFailureReason.NO_TEXT;
+      } else if (ocrResult.items.length === 0) {
+        failureReason = OCRFailureReason.NO_ITEMS;
+      } else if (ocrResult.totalAmount === 0) {
+        failureReason = OCRFailureReason.NO_TOTAL;
+      }
+
+      if (!failureReason) {
         finalData = { ...ocrResult, scanSource: 'ocr' };
+        setScanStatus("Đã nhận diện thành công!");
       } else {
         // 3. Fallback to Gemini
-        console.log("[OCR CLIENT] Local OCR failed or insufficient, falling back to AI...");
-        const reader = new FileReader();
+        const fallbackMsg = OCR_FAILURE_MESSAGES[failureReason];
+        console.log(`[OCR CLIENT] Local OCR failed: ${failureReason}. Falling back to AI...`);
+        setScanStatus(`${fallbackMsg} \nĐang thử AI OCR...`);
         
+        const reader = new FileReader();
         const base64Promise = new Promise<string>((resolve) => {
           reader.onload = () => resolve(reader.result as string);
           reader.readAsDataURL(file);
@@ -201,6 +232,7 @@ export default function AddBillForm({
         const aiData = await res.json();
         if (res.ok) {
           finalData = aiData;
+          setScanStatus("Đã nhận diện bằng AI OCR ✨");
         } else {
           throw new Error(aiData.error || "Không thể nhận diện hóa đơn");
         }
@@ -220,6 +252,13 @@ export default function AddBillForm({
         if (!description || description === "" || description === "Hóa đơn từ AI" || description === "Hóa đơn mới") {
           setDescription(finalData.merchant || "Hóa đơn mới");
         }
+
+        console.log(`[OCR RESULT]
+Source: ${finalData.scanSource === 'ai' ? 'AI' : 'OCR'}
+Reason: ${failureReason || 'SUCCESS'}
+Items: ${finalData.items.length}
+Total: ${finalData.totalAmount}
+Duration: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
         
         setSplitType("custom");
         const newAmounts: Record<string, number> = {};
@@ -245,6 +284,7 @@ export default function AddBillForm({
     } finally {
       setIsScanning(false);
       setOcrProgress(0);
+      setTimeout(() => setScanStatus(""), 3000);
     }
   };
 
