@@ -133,10 +133,10 @@ export default function AddBillForm({
             }));
             setOcrItems(newOcrItems);
             
-            if (!totalAmount || totalAmount === 0 || totalAmount === "") {
+            if (!totalAmount) {
               setTotalAmount(data.totalAmount || 0);
             }
-            if (!description || description === "" || description === "Hóa đơn từ AI") {
+            if (!description || description === "Hóa đơn từ AI") {
               setDescription(data.merchant || "Hóa đơn từ AI");
             }
             
