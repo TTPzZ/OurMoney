@@ -133,8 +133,10 @@ export default function AddBillForm({
             }));
             setOcrItems(newOcrItems);
             
-            setTotalAmount(data.totalAmount || 0);
-            if (!description || description === "Hóa đơn từ AI") {
+            if (!totalAmount || totalAmount === 0 || totalAmount === "") {
+              setTotalAmount(data.totalAmount || 0);
+            }
+            if (!description || description === "" || description === "Hóa đơn từ AI") {
               setDescription(data.merchant || "Hóa đơn từ AI");
             }
             
@@ -313,7 +315,7 @@ export default function AddBillForm({
 
         {/* AI Line Items Section */}
         {ocrItems.length > 0 && (
-          <Section title="Chi tiết món ăn (từ AI)" icon={<Sparkles size={16} />}>
+          <Section title="Chi tiết hóa đơn" icon={<Sparkles size={16} />}>
             <div className="space-y-3">
               {ocrItems.map((item, idx) => (
                 <Card key={idx} className="p-4 space-y-3">
