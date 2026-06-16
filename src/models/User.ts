@@ -9,6 +9,7 @@ export interface IUser extends Document {
   googleImage?: string | null;
   customName?: string | null;
   customImage?: string | null;
+  geminiApiKey?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,6 +24,7 @@ const UserSchema = new Schema<IUser>(
     googleImage: { type: String, default: null },
     customName: { type: String, default: null },
     customImage: { type: String, default: null },
+    geminiApiKey: { type: String, default: null },
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true },

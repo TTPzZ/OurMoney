@@ -10,11 +10,14 @@ import Input from "@/components/ui/Input";
 import Card from "@/components/ui/Card";
 import { getGroupDetailCachePredicate, type PublicUser } from "@/lib/current-user";
 import { useCurrentUser } from "@/lib/use-current-user";
+import { updateGeminiKey } from "@/lib/actions/user";
 
 export default function ProfileClient({
   initialUser,
+  hasGeminiKey: initialHasGeminiKey,
 }: {
   initialUser: PublicUser;
+  hasGeminiKey: boolean;
 }) {
   const { update } = useSession();
   const { mutate } = useSWRConfig();
@@ -22,6 +25,8 @@ export default function ProfileClient({
   const [name, setName] = useState(initialUser.name);
   const [image, setImage] = useState(initialUser.image || "");
   const [imageChanged, setImageChanged] = useState(false);
+  const [geminiKey, setGeminiKey] = useState("");
+  const [hasGeminiKey, setHasGeminiKey] = useState(initialHasGeminiKey);
   const [isPending, startTransition] = useTransition();
 
   const syncProfileCaches = async (nextUser: PublicUser) => {
@@ -209,7 +214,58 @@ export default function ProfileClient({
             </Button>
           )}
         </div>
+
+        {/* Gemini API Key Section */}
+        <div className="pt-4 border-t border-slate-200">
+          <SectionTitle title="Gemini API Key" />
+          <Card className="p-6 space-y-4">
+            <div className="space-y-1">
+              <Input
+                type="password"
+                value={geminiKey}
+                onChange={(e) => setGeminiKey(e.target.value)}
+                disabled={isPending}
+                placeholder={hasGeminiKey ? "••••••••••••••••" : "Nhập Gemini API Key của bạn"}
+              />
+              <p className="text-[10px] font-bold text-slate-400">
+                Dùng để hỗ trợ đọc hóa đơn khó nhận diện.
+              </p>
+            </div>
+            <Button
+              onClick={() => {
+                startTransition(async () => {
+                  try {
+                    if (!geminiKey.trim()) {
+                      alert("Vui lòng nhập API Key.");
+                      return;
+                    }
+                    await updateGeminiKey(geminiKey.trim());
+                    setGeminiKey("");
+                    setHasGeminiKey(true);
+                    alert("Đã lưu Gemini API Key!");
+                  } catch (err: any) {
+                    alert(err.message || "Lỗi khi lưu API Key");
+                  }
+                });
+              }}
+              loading={isPending}
+              disabled={!geminiKey.trim()}
+              variant="outline"
+              className="w-full"
+            >
+              Lưu Key
+            </Button>
+          </Card>
+        </div>
       </div>
     </div>
+  );
+}
+
+function SectionTitle({ title }: { title: string }) {
+  return (
+    <h3 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">
+      {title}
+    </h3>
   );
 }

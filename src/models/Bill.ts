@@ -12,6 +12,7 @@ export interface IBill extends Document {
   paidBy: Types.ObjectId;
   splits: IBillSplit[];
   imageUrl?: string;
+  scanSource?: 'ocr' | 'ai' | null;
   createdAt: Date;
 }
 
@@ -27,6 +28,7 @@ const BillSchema = new Schema<IBill>({
     },
   ],
   imageUrl: { type: String },
+  scanSource: { type: String, enum: ['ocr', 'ai'], default: null },
   createdAt: { type: Date, default: Date.now },
 });
 

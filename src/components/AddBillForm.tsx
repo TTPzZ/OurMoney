@@ -53,6 +53,7 @@ export default function AddBillForm({
 
   const [ocrItems, setOcrItems] = useState<OCRItem[]>([]);
   const [isScanning, setIsScanning] = useState(false);
+  const [scanSource, setScanSource] = useState<'ocr' | 'ai' | null>(null);
 
   const waitForNextPaint = () => {
     return new Promise<void>((resolve) => {
@@ -132,6 +133,7 @@ export default function AddBillForm({
               selectedMembers: selectedParticipants // Default to all selected participants
             }));
             setOcrItems(newOcrItems);
+            setScanSource(data.scanSource || null);
             
             if (!totalAmount) {
               setTotalAmount(data.totalAmount || 0);
@@ -280,7 +282,7 @@ export default function AddBillForm({
           </h2>
           <label className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-3 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-transform shadow-sm border border-indigo-100">
             <Sparkles size={14} className={isScanning ? "animate-spin" : ""} />
-            {isScanning ? "Đang quét..." : "Quét hóa đơn AI ✨"}
+            {isScanning ? "Đang quét..." : "Quét hóa đơn ✨"}
             <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanBill} disabled={isScanning} />
           </label>
         </div>

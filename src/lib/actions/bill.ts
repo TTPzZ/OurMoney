@@ -12,6 +12,7 @@ export async function createBill(
     totalAmount: number;
     paidBy: string;
     splits: { userId: string; amount: number }[];
+    scanSource?: 'ocr' | 'ai' | null;
   }
 ) {
   const session = await auth();
@@ -30,6 +31,7 @@ export async function createBill(
     totalAmount: data.totalAmount,
     paidBy: data.paidBy,
     splits: data.splits,
+    scanSource: data.scanSource,
   });
 
   return JSON.parse(JSON.stringify(

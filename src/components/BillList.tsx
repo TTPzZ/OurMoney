@@ -10,6 +10,7 @@ interface Bill {
     name: string;
     image?: string;
   };
+  scanSource?: 'ocr' | 'ai' | null;
   createdAt: string;
 }
 
@@ -30,9 +31,21 @@ export default function BillList({ bills }: { bills: Bill[] }) {
               <Avatar src={bill.paidBy.image} name={bill.paidBy.name} size={40} />
             </div>
             <div>
-              <h3 className="font-bold text-gray-900 leading-tight">
-                {bill.description}
-              </h3>
+              <div className="flex items-center gap-2">
+                <h3 className="font-bold text-gray-900 leading-tight">
+                  {bill.description}
+                </h3>
+                {bill.scanSource === 'ocr' && (
+                  <span className="px-1.5 py-0.5 bg-slate-100 text-slate-500 rounded text-[8px] font-black uppercase tracking-tighter">
+                    📄 OCR
+                  </span>
+                )}
+                {bill.scanSource === 'ai' && (
+                  <span className="px-1.5 py-0.5 bg-indigo-50 text-indigo-600 rounded text-[8px] font-black uppercase tracking-tighter border border-indigo-100">
+                    ✨ AI
+                  </span>
+                )}
+              </div>
               <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">
                 Paid by {bill.paidBy.name.split(" ")[0]} • {formatDistanceToNow(new Date(bill.createdAt))} ago
               </p>

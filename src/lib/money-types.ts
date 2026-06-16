@@ -28,6 +28,7 @@ export interface BillWithPayer extends Omit<Bill, "paidBy"> {
   description: string;
   createdAt: string;
   paidBy: GroupMember;
+  scanSource?: 'ocr' | 'ai' | null;
 }
 
 export interface Settlement {

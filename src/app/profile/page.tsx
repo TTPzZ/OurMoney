@@ -5,12 +5,18 @@ import { ChevronLeft, LogOut } from "lucide-react";
 import type { PublicUser } from "@/lib/current-user";
 import ProfileClient from "./ProfileClient";
 import { SessionProvider } from "next-auth/react";
+import connectDB from "@/lib/db";
+import User, { IUser } from "@/models/User";
 
 export const preferredRegion = "sin1";
 
 export default async function ProfilePage() {
   const session = await auth();
-  if (!session?.user) redirect("/");
+  if (!session?.user?.id) redirect("/");
+
+  await connectDB();
+  const dbUser = await User.findById(session.user.id).lean() as IUser | null;
+  if (!dbUser) redirect("/");
 
   return (
     <main className="min-h-screen bg-gray-50 flex flex-col items-center p-4">
@@ -27,10 +33,11 @@ export default async function ProfilePage() {
         <ProfileClient 
           initialUser={{
             _id: session.user.id,
-            name: session.user.name || "",
-            image: session.user.image || undefined,
-            email: session.user.email || undefined,
+            name: dbUser.customName || dbUser.name || "",
+            image: dbUser.customImage || dbUser.image || undefined,
+            email: dbUser.email || undefined,
           } satisfies PublicUser}
+          hasGeminiKey={!!dbUser.geminiApiKey}
         />
       </SessionProvider>
 

@@ -59,7 +59,7 @@ export async function getBillsByGroupId(groupId: string): Promise<BillWithPayer[
   await connectDB();
   const bills = await Bill.find({ groupId })
     .populate("paidBy", USER_PUBLIC_SELECT)
-    .select("description totalAmount paidBy splits createdAt")
+    .select("description totalAmount paidBy splits scanSource createdAt")
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();

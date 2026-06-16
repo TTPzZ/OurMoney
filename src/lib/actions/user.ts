@@ -20,3 +20,16 @@ export async function updateUserProfile(name: string, image: string) {
 
   revalidatePath("/dashboard");
 }
+
+export async function updateGeminiKey(key: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  await connectDB();
+
+  await User.findByIdAndUpdate(session.user.id, {
+    geminiApiKey: key,
+  });
+
+  revalidatePath("/profile");
+}
