@@ -64,8 +64,9 @@ export default function BillList({ bills }: { bills: Bill[] }) {
                   </span>
                 )}
                 {bill.imageUrl && (
-                  <div className="p-0.5 bg-emerald-50 text-emerald-600 rounded">
-                    <Maximize2 size={8} />
+                  <div className="flex items-center gap-1 px-1.5 py-0.5 bg-emerald-50 text-emerald-600 rounded-[4px] border border-emerald-100 shadow-sm animate-pulse">
+                    <Maximize2 size={8} className="font-black" />
+                    <span className="text-[7px] font-black uppercase">Ảnh</span>
                   </div>
                 )}
               </div>
