@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
       console.warn("[Gemini] Could not list models (possibly API Key restriction)");
     }
 
-    // Default to 1.5-flash as it's the most stable for Free Tier across all regions
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Use gemini-2.0-flash as requested
+    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
 
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const mimeType = imageBase64.split(';')[0].split(':')[1] || "image/jpeg";
