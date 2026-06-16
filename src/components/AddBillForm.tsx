@@ -80,6 +80,77 @@ const OCR_FAILURE_MESSAGES: Record<OCRFailureReason, string> = {
   [OCRFailureReason.OCR_ERROR]: "OCR gặp lỗi trong quá trình xử lý ảnh."
 };
 
+/**
+ * Tiền xử lý ảnh để tối ưu hóa cho Tesseract OCR
+ * Bao gồm: Grayscale, Tăng tương phản và Binarization
+ */
+const preprocessImage = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Không thể khởi tạo canvas context"));
+
+        // Giới hạn kích thước ảnh để xử lý nhanh hơn và tránh lỗi bộ nhớ
+        const MAX_DIM = 2000;
+        let width = img.width;
+        let height = img.height;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
+          width *= ratio;
+          height *= ratio;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+
+        // BƯỚC 1: Grayscale & Contrast bằng Filter API (Nhanh)
+        // Tăng contrast giúp chữ đen rõ hơn trên nền trắng
+        ctx.filter = 'grayscale(1) contrast(1.8) brightness(1.1)';
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // BƯỚC 2: Binarization (Ngưỡng hóa) thủ công để tẩy nền
+        // Giúp loại bỏ các watermark mờ và nhiễu nền
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        
+        // Tính toán độ sáng trung bình để có ngưỡng động nhẹ (optional)
+        // Ở đây dùng ngưỡng cố định 145/255 để lọc watermark "GIA DINH WATER"
+        const threshold = 145; 
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // Công thức Luminance chuẩn
+          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+          
+          // Chuyển về trắng hẳn hoặc đen hẳn
+          const v = gray > threshold ? 255 : 0;
+          
+          data[i] = v;     // R
+          data[i + 1] = v; // G
+          data[i + 2] = v; // B
+          // data[i+3] (Alpha) giữ nguyên
+        }
+
+        ctx.putImageData(imageData, 0, 0);
+        
+        // Trả về dataUrl chất lượng cao cho Tesseract
+        resolve(canvas.toDataURL("image/jpeg", 0.95));
+      };
+      img.onerror = () => reject(new Error("Lỗi khi tải ảnh"));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("Lỗi khi đọc file"));
+    reader.readAsDataURL(file);
+  });
+};
+
 export default function AddBillForm({ 
   groupId, 
   members, 
@@ -179,8 +250,11 @@ export default function AddBillForm({
 
     try {
       // 1. Client-Side Tesseract OCR
+      setScanStatus("Đang xử lý ảnh...");
+      const processedImage = await preprocessImage(file);
+      
       setScanStatus("Đang nhận diện chữ...");
-      const result = await Tesseract.recognize(file, 'vie+eng', {
+      const result = await Tesseract.recognize(processedImage, 'vie', {
         logger: m => {
           if (m.status === 'recognizing text') {
             setOcrProgress(Math.round(m.progress * 100));
