@@ -10,6 +10,7 @@ import { useSWRConfig } from "swr";
 import Button from "@/components/ui/Button";
 import Card from "@/components/ui/Card";
 import Section from "@/components/ui/Section";
+import Tesseract from 'tesseract.js';
 
 interface Member {
   _id: string;
@@ -23,6 +24,46 @@ interface OCRItem {
   unitPrice: number;
   totalPrice: number;
   selectedMembers: string[];
+}
+
+function parseRawText(text: string) {
+  const lines = text.split('\n').map(l => l.trim()).filter(Boolean);
+  let totalAmount = 0;
+  const items: any[] = [];
+  let merchant = "Hóa đơn mới";
+
+  if (lines.length > 0) merchant = lines[0];
+
+  const totalPatterns = [
+    /(?:TỔNG|TONG|TOTAL|THANH TOAN|CỘNG|CONG)[:\s]+([\d.,]+)/i,
+    /([\d.,]+)\s*(?:VNĐ|VND|Đ|D)/i,
+  ];
+
+  for (const line of lines) {
+    for (const pattern of totalPatterns) {
+      const match = line.match(pattern);
+      if (match) {
+        const value = parseInt(match[1].replace(/[.,]/g, ''));
+        if (value > totalAmount) totalAmount = value;
+      }
+    }
+
+    const itemMatch = line.match(/^(.+?)\s+([\d.,]+)$/);
+    if (itemMatch) {
+      const name = itemMatch[1].trim();
+      const price = parseInt(itemMatch[2].replace(/[.,]/g, ''));
+      if (price > 1000 && price < totalAmount && !line.toLowerCase().includes('tổng')) {
+        items.push({
+          name,
+          quantity: 1,
+          unitPrice: price,
+          totalPrice: price
+        });
+      }
+    }
+  }
+
+  return { merchant, totalAmount, items };
 }
 
 export default function AddBillForm({ 
@@ -54,6 +95,7 @@ export default function AddBillForm({
   const [ocrItems, setOcrItems] = useState<OCRItem[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [scanSource, setScanSource] = useState<'ocr' | 'ai' | null>(null);
+  const [ocrProgress, setOcrProgress] = useState(0);
 
   const waitForNextPaint = () => {
     return new Promise<void>((resolve) => {
@@ -96,7 +138,7 @@ export default function AddBillForm({
     }
     return true;
   }, [description, totalAmount, selectedParticipants, splitType, customTotal]);
-
+  
   const handleParticipantToggle = (id: string) => {
     setSelectedParticipants(prev => 
       prev.includes(id) ? prev.filter(p => p !== id) : [...prev, id]
@@ -113,69 +155,99 @@ export default function AddBillForm({
     if (!file) return;
 
     setIsScanning(true);
+    setOcrProgress(0);
     setError("");
 
-    try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const base64 = reader.result as string;
-        try {
-          const res = await fetch("/api/ocr", {
-            method: "POST",
-            body: JSON.stringify({ imageBase64: base64 }),
-          });
-          const data = await res.json();
-          
-          if (data.items && Array.isArray(data.items)) {
-            const newOcrItems = data.items.map((item: any) => ({
-              ...item,
-              selectedMembers: selectedParticipants // Default to all selected participants
-            }));
-            setOcrItems(newOcrItems);
-            setScanSource(data.scanSource || null);
-            
-            if (!totalAmount) {
-              setTotalAmount(data.totalAmount || 0);
-            }
-            if (!description || description === "Hóa đơn từ AI") {
-              setDescription(data.merchant || "Hóa đơn từ AI");
-            }
-            
-            // Switch to custom split and calculate based on OCR immediately
-            setSplitType("custom");
-            const newAmounts: Record<string, number> = {};
-            members.forEach(m => newAmounts[m._id] = 0);
-            
-            newOcrItems.forEach((item: OCRItem) => {
-              if (item.selectedMembers.length > 0) {
-                const splitPrice = item.totalPrice / item.selectedMembers.length;
-                item.selectedMembers.forEach((id: string) => {
-                  newAmounts[id] += splitPrice;
-                });
-              }
-            });
-            
-            Object.keys(newAmounts).forEach(id => {
-              newAmounts[id] = Math.round(newAmounts[id]);
-            });
-            
-            setCustomAmounts(newAmounts);
+    const startTime = Date.now();
+    console.log(`[OCR CLIENT] Start processing image. Size: ${(file.size / 1024).toFixed(2)} KB`);
 
-          } else {
-            setError(data.error || "Không thể nhận diện hóa đơn");
+    try {
+      // 1. Client-Side Tesseract OCR
+      const result = await Tesseract.recognize(file, 'vie+eng', {
+        logger: m => {
+          if (m.status === 'recognizing text') {
+            setOcrProgress(Math.round(m.progress * 100));
           }
-        } catch {
-          setError("Lỗi kết nối AI");
-        } finally {
-          setIsScanning(false);
         }
-      };
-    } catch {
-      setError("Lỗi khi đọc file");
+      });
+
+      const ocrDuration = Date.now() - startTime;
+      console.log(`[OCR CLIENT] OCR finished in ${ocrDuration}ms. Extracted text length: ${result.data.text.length}`);
+
+      const ocrResult = parseRawText(result.data.text);
+      console.log(`[OCR PARSER] Found ${ocrResult.items.length} items. Total: ${ocrResult.totalAmount}`);
+
+      let finalData = null;
+
+      // 2. Success check (Total found and at least 1 item)
+      if (ocrResult.totalAmount > 0 && ocrResult.items.length > 0) {
+        finalData = { ...ocrResult, scanSource: 'ocr' };
+      } else {
+        // 3. Fallback to Gemini
+        console.log("[OCR CLIENT] Local OCR failed or insufficient, falling back to AI...");
+        const reader = new FileReader();
+        
+        const base64Promise = new Promise<string>((resolve) => {
+          reader.onload = () => resolve(reader.result as string);
+          reader.readAsDataURL(file);
+        });
+
+        const base64 = await base64Promise;
+        const res = await fetch("/api/ocr", {
+          method: "POST",
+          body: JSON.stringify({ imageBase64: base64 }),
+        });
+
+        const aiData = await res.json();
+        if (res.ok) {
+          finalData = aiData;
+        } else {
+          throw new Error(aiData.error || "Không thể nhận diện hóa đơn");
+        }
+      }
+
+      if (finalData && finalData.items && Array.isArray(finalData.items)) {
+        const newOcrItems = finalData.items.map((item: any) => ({
+          ...item,
+          selectedMembers: selectedParticipants
+        }));
+        setOcrItems(newOcrItems);
+        setScanSource(finalData.scanSource || null);
+        
+        if (!totalAmount) {
+          setTotalAmount(finalData.totalAmount || 0);
+        }
+        if (!description || description === "" || description === "Hóa đơn từ AI" || description === "Hóa đơn mới") {
+          setDescription(finalData.merchant || "Hóa đơn mới");
+        }
+        
+        setSplitType("custom");
+        const newAmounts: Record<string, number> = {};
+        members.forEach(m => newAmounts[m._id] = 0);
+        
+        newOcrItems.forEach((item: OCRItem) => {
+          if (item.selectedMembers.length > 0) {
+            const splitPrice = item.totalPrice / item.selectedMembers.length;
+            item.selectedMembers.forEach((id: string) => {
+              newAmounts[id] += splitPrice;
+            });
+          }
+        });
+        
+        Object.keys(newAmounts).forEach(id => {
+          newAmounts[id] = Math.round(newAmounts[id]);
+        });
+        setCustomAmounts(newAmounts);
+      }
+    } catch (err: any) {
+      console.error("[OCR CLIENT] Error:", err);
+      setError(err.message || "Lỗi khi quét hóa đơn");
+    } finally {
       setIsScanning(false);
+      setOcrProgress(0);
     }
   };
+
 
   const handleOcrItemMemberToggle = (idx: number, memberId: string) => {
     const newItems = [...ocrItems];
@@ -226,7 +298,8 @@ export default function AddBillForm({
         description,
         totalAmount: Number(totalAmount),
         paidBy,
-        splits
+        splits,
+        scanSource
       });
 
       if (onSuccess) {
@@ -282,7 +355,7 @@ export default function AddBillForm({
           </h2>
           <label className="flex items-center gap-2 bg-indigo-50 text-indigo-600 px-3 py-2 rounded-xl text-xs font-bold cursor-pointer active:scale-95 transition-transform shadow-sm border border-indigo-100">
             <Sparkles size={14} className={isScanning ? "animate-spin" : ""} />
-            {isScanning ? "Đang quét..." : "Quét hóa đơn ✨"}
+            {isScanning ? (ocrProgress > 0 ? `Đang quét... ${ocrProgress}%` : "Đang chuẩn bị...") : "Quét hóa đơn ✨"}
             <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleScanBill} disabled={isScanning} />
           </label>
         </div>
