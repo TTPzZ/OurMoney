@@ -40,8 +40,8 @@ export async function POST(req: NextRequest) {
       console.warn("[Gemini] Could not list models (possibly API Key restriction)");
     }
 
-    // Use gemini-2.0-flash as requested
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash" });
+    // Use gemini-2.5-flash as requested by user
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     const base64Data = imageBase64.split(',')[1] || imageBase64;
     const mimeType = imageBase64.split(';')[0].split(':')[1] || "image/jpeg";
