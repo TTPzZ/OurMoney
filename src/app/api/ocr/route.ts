@@ -83,11 +83,20 @@ Do not include markdown.`;
       });
     } catch (parseError) {
       console.log(`[OCR AI] Gemini finished in ${aiDuration}ms. Success: false (Parse Error)`);
-      return NextResponse.json({ error: "Failed to parse AI response" }, { status: 500 });
+      return NextResponse.json({ error: "AI trả về dữ liệu không đúng cấu trúc. Hãy thử lại." }, { status: 500 });
     }
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("OCR API Error:", error);
-    return NextResponse.json({ error: "Failed to process image" }, { status: 500 });
+    
+    // Check for Quota Exceeded (429) - specifically for Free Tier
+    const errorMessage = error?.message || "";
+    if (error?.status === 429 || errorMessage.includes("429") || errorMessage.includes("Quota exceeded")) {
+      return NextResponse.json({ 
+        error: "Bạn đã dùng hết lượt AI miễn phí của hôm nay. Vui lòng đợi 1 phút hoặc thử lại vào ngày mai." 
+      }, { status: 429 });
+    }
+
+    return NextResponse.json({ error: "Lỗi trong quá trình xử lý ảnh bằng AI." }, { status: 500 });
   }
 }
