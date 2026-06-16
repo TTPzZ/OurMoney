@@ -61,3 +61,16 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# requirements and prompts
+phase*.md
+Prompt*.md
+plan.md
+phase.md
+AGENTS.md
+ai_rules.md
+CLAUDE.md
+database.md
+skill.md
+performance_report_*.md
+SMART RECEIPT OCR *.md
