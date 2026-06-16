@@ -63,8 +63,8 @@ yarn-error.log*
 next-env.d.ts
 
 # requirements and prompts
-phase*.md
-Prompt*.md
+phase*
+Prompt*
 plan.md
 phase.md
 AGENTS.md
@@ -72,5 +72,5 @@ ai_rules.md
 CLAUDE.md
 database.md
 skill.md
-performance_report_*.md
-SMART RECEIPT OCR *.md
+performance_report_*
+SMART RECEIPT OCR *
