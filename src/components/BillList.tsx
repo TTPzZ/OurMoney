@@ -162,17 +162,19 @@ export default function BillList({ bills }: { bills: Bill[] }) {
                   </div>
 
                   {/* Splits */}
-                  <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
-                    {selectedBill.splits.map((split, idx) => (
-                      <div key={idx} className="flex items-center justify-between p-4">
-                        <div className="flex items-center gap-3">
-                          <Avatar src={split.userId.image} name={split.userId.name} size={32} />
-                          <span className="font-bold text-slate-700 text-sm">{split.userId.name}</span>
+                  {selectedBill.splits && selectedBill.splits.length > 0 && (
+                    <div className="bg-white rounded-2xl border border-slate-100 overflow-hidden divide-y divide-slate-50">
+                      {selectedBill.splits.map((split, idx) => (
+                        <div key={idx} className="flex items-center justify-between p-4">
+                          <div className="flex items-center gap-3">
+                            <Avatar src={split.userId?.image} name={split.userId?.name || "Thành viên"} size={32} />
+                            <span className="font-bold text-slate-700 text-sm">{split.userId?.name || "Thành viên"}</span>
+                          </div>
+                          <span className="font-black text-slate-900 text-sm">₫{split.amount.toLocaleString()}</span>
                         </div>
-                        <span className="font-black text-slate-900 text-sm">₫{split.amount.toLocaleString()}</span>
-                      </div>
-                    ))}
-                  </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

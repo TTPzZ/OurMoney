@@ -59,7 +59,8 @@ export async function getBillsByGroupId(groupId: string): Promise<BillWithPayer[
   await connectDB();
   const bills = await Bill.find({ groupId })
     .populate("paidBy", USER_PUBLIC_SELECT)
-    .select("description totalAmount paidBy splits scanSource createdAt")
+    .populate("splits.userId", USER_PUBLIC_SELECT)
+    .select("description totalAmount paidBy splits imageUrl scanSource createdAt")
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
@@ -71,6 +72,10 @@ export async function getBillsByGroupId(groupId: string): Promise<BillWithPayer[
     bills.map((bill) => ({
       ...bill,
       paidBy: normalizePublicUser(bill.paidBy),
+      splits: bill.splits.map((split: any) => ({
+        ...split,
+        userId: normalizePublicUser(split.userId),
+      })),
     })),
   ) as unknown as BillWithPayer[];
 }

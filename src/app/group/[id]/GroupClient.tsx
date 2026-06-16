@@ -16,6 +16,7 @@ import Section from "@/components/ui/Section";
 import { useRouter } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
 import AddBillModal from "@/components/AddBillModal";
+import BillList from "@/components/BillList";
 import { deleteGroup, leaveGroup } from "@/lib/actions/group";
 import { markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
 import type { BillWithPayer, GroupDetailData, GroupMember, Settlement } from "@/lib/money-types";
@@ -343,31 +344,8 @@ export default function GroupClient({
 
         {/* Recent Bills */}
         <Section title="Hóa đơn gần đây" icon={<Receipt size={16} />}>
-          {bills.length > 0 ? (
-            <div className="space-y-3">
-              {bills.map((bill: BillWithPayer) => (
-                <Card key={bill._id} className="p-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-400">
-                      <Receipt size={20} />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-slate-900 leading-tight">{bill.description}</h4>
-                      <div className="flex items-center gap-2 text-[10px] text-slate-400 font-bold uppercase tracking-widest">
-                        <span>{bill.paidBy.name.split(' ')[0]} trả</span>
-                        <span>•</span>
-                        <span className="flex items-center gap-1">
-                          <Clock size={10} />
-                          {new Date(bill.createdAt).toLocaleDateString('vi-VN')}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className="font-black text-slate-900">₫{bill.totalAmount.toLocaleString()}</span>
-                </Card>
-              ))}
-            </div>
-          ) : (
+          <BillList bills={bills} />
+          {bills.length === 0 && (
             <div className="bg-white p-8 rounded-3xl text-center border-2 border-dashed border-slate-100">
               <p className="text-slate-400 font-medium text-sm">Chưa có hóa đơn nào được tạo.</p>
             </div>

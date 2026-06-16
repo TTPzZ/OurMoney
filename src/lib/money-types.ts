@@ -23,11 +23,17 @@ export interface GroupDetail {
   members: GroupMember[];
 }
 
-export interface BillWithPayer extends Omit<Bill, "paidBy"> {
+export interface BillWithPayer extends Omit<Bill, "paidBy" | "splits"> {
   _id: string;
   description: string;
+  totalAmount: number;
   createdAt: string;
   paidBy: GroupMember;
+  splits: {
+    userId: GroupMember;
+    amount: number;
+  }[];
+  imageUrl?: string;
   scanSource?: 'ocr' | 'ai' | null;
 }
 
