@@ -5,6 +5,7 @@ export interface GroupMember {
   name: string;
   email?: string;
   image?: string | null;
+  hasPaymentQR?: boolean;
 }
 
 export interface GroupListItem {

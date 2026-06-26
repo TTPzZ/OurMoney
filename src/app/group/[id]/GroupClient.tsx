@@ -8,7 +8,7 @@ import { simplifyDebts } from "@/lib/utils/debt";
 import GroupInviteQR from "@/components/GroupInviteQR";
 import GroupMembersDialog from "@/components/GroupMembersDialog";
 import Link from "next/link";
-import { ChevronLeft, Plus, Receipt, Landmark, Trash2, CheckCircle2, Clock, LogOut } from "lucide-react";
+import { ChevronLeft, Plus, Receipt, Landmark, Trash2, CheckCircle2, Clock, LogOut, QrCode } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -16,6 +16,7 @@ import Section from "@/components/ui/Section";
 import { useRouter } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
 import AddBillModal from "@/components/AddBillModal";
+import PaymentQRModal from "@/components/PaymentQRModal";
 import BillList from "@/components/BillList";
 import { deleteGroup, leaveGroup } from "@/lib/actions/group";
 import { markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
@@ -37,6 +38,7 @@ export default function GroupClient({
   const router = useRouter();
   const [showMembers, setShowMembers] = useState(false);
   const [showAddBill, setShowAddBill] = useState(false);
+  const [qrUser, setQrUser] = useState<{ id: string; name: string; image?: string | null } | null>(null);
   const { mutate: mutateGlobal } = useSWRConfig();
 
   // Task 3: Cache-First strategy for Group Detail
@@ -183,6 +185,7 @@ export default function GroupClient({
           {isCreator ? (
             <ActionButton 
               action={async () => {
+                if (!confirm("Bạn có chắc chắn muốn xóa nhóm này? Mọi dữ liệu hóa đơn sẽ bị xóa vĩnh viễn.")) return;
                 await deleteGroup(groupId);
                 mutateGlobal(`/api/groups/${groupId}`, undefined, { revalidate: false });
                 await mutateGlobal("/api/groups");
@@ -197,6 +200,11 @@ export default function GroupClient({
           ) : (
             <ActionButton 
               action={async () => {
+                if (userOwes.length > 0 || owedToUser.length > 0) {
+                  alert("Bạn phải hoàn thành tất cả khoản nợ hoặc tiền nhận trước khi rời nhóm!");
+                  return;
+                }
+                if (!confirm("Bạn có chắc chắn muốn rời nhóm này?")) return;
                 await leaveGroup(groupId);
                 mutateGlobal(`/api/groups/${groupId}`, undefined, { revalidate: false });
                 await mutateGlobal("/api/groups");
@@ -271,22 +279,40 @@ export default function GroupClient({
                         <p className="text-xs font-bold text-red-500">-₫{t.amount.toLocaleString()}</p>
                       </div>
                     </div>
-                    {isPending ? (
-                      <div className="flex items-center gap-1 text-[10px] font-bold text-amber-500 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 shadow-sm">
-                        <Clock size={12} />
-                        Đang chờ...
-                      </div>
-                    ) : (
-                      <ActionButton 
-                        action={async () => {
-                          await markAsPaid(groupId, t.to, t.amount);
-                          await mutate();
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (toMember?.hasPaymentQR) {
+                            setQrUser({ id: toMember._id, name: toMember.name, image: toMember.image });
+                          }
                         }}
-                        className="px-4 py-2 text-xs"
+                        className={`p-2 rounded-xl border flex items-center justify-center transition-all ${
+                          toMember?.hasPaymentQR 
+                            ? "bg-indigo-50 text-indigo-500 border-indigo-100 hover:bg-indigo-100 active:scale-95 cursor-pointer" 
+                            : "bg-gray-50 text-gray-300 border-gray-100 cursor-not-allowed"
+                        }`}
+                        aria-label="Mã QR"
                       >
-                        Đã trả
-                      </ActionButton>
-                    )}
+                        <QrCode size={16} />
+                      </button>
+                      {isPending ? (
+                        <div className="flex items-center gap-1 text-[10px] font-bold text-amber-500 bg-amber-50 px-3 py-2 rounded-xl border border-amber-100 shadow-sm h-full">
+                          <Clock size={12} />
+                          Đang chờ...
+                        </div>
+                      ) : (
+                        <ActionButton 
+                          action={async () => {
+                            await markAsPaid(groupId, t.to, t.amount);
+                            await mutate();
+                          }}
+                          className="px-4 py-2 text-xs h-full"
+                        >
+                          Đã trả
+                        </ActionButton>
+                      )}
+                    </div>
                   </Card>
                 );
               })}
@@ -385,6 +411,14 @@ export default function GroupClient({
         open={showMembers}
         onClose={() => setShowMembers(false)}
         members={group.members}
+      />
+
+      <PaymentQRModal
+        open={!!qrUser}
+        onClose={() => setQrUser(null)}
+        userId={qrUser?.id || ""}
+        userName={qrUser?.name || ""}
+        userImage={qrUser?.image}
       />
     </main>
   );

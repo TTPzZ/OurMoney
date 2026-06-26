@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Avatar from "@/components/Avatar";
-import { X, Receipt, Users, CreditCard, ExternalLink, Maximize2 } from "lucide-react";
+import { X, Receipt, Users, CreditCard, ExternalLink, Maximize2, QrCode } from "lucide-react";
 import Card from "@/components/ui/Card";
+import PaymentQRModal from "@/components/PaymentQRModal";
 
 interface BillSplit {
   userId: {
@@ -21,6 +22,7 @@ interface Bill {
     _id: string;
     name: string;
     image?: string;
+    hasPaymentQR?: boolean;
   };
   splits: BillSplit[];
   imageUrl?: string;
@@ -31,6 +33,7 @@ interface Bill {
 export default function BillList({ bills }: { bills: Bill[] }) {
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [showFullImage, setShowFullImage] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   if (bills.length === 0) {
     return null;
@@ -201,8 +204,24 @@ export default function BillList({ bills }: { bills: Bill[] }) {
                         <p className="font-bold text-white text-sm">{selectedBill.paidBy.name}</p>
                       </div>
                     </div>
-                    <div className="text-right">
+                    <div className="text-right flex flex-col items-end gap-2">
                       <p className="text-xs font-black text-white">₫{selectedBill.totalAmount.toLocaleString()}</p>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (selectedBill.paidBy.hasPaymentQR) setShowQR(true);
+                        }}
+                        disabled={!selectedBill.paidBy.hasPaymentQR}
+                        className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-1.5 border transition-all ${
+                          selectedBill.paidBy.hasPaymentQR
+                            ? "bg-white/20 text-white border-white/30 hover:bg-white/30 active:scale-95"
+                            : "bg-white/5 text-white/40 border-white/10 cursor-not-allowed"
+                        }`}
+                        aria-label="Mã QR"
+                      >
+                        <QrCode size={12} />
+                        Mã QR
+                      </button>
                     </div>
                   </div>
 
@@ -225,6 +244,16 @@ export default function BillList({ bills }: { bills: Bill[] }) {
             </div>
           </div>
         </div>
+      )}
+
+      {selectedBill && (
+        <PaymentQRModal
+          open={showQR}
+          onClose={() => setShowQR(false)}
+          userId={selectedBill.paidBy._id}
+          userName={selectedBill.paidBy.name}
+          userImage={selectedBill.paidBy.image}
+        />
       )}
     </div>
   );

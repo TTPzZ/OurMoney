@@ -10,6 +10,7 @@ export interface IUser extends Document {
   customName?: string | null;
   customImage?: string | null;
   geminiApiKey?: string | null;
+  paymentQR?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -25,6 +26,7 @@ const UserSchema = new Schema<IUser>(
     customName: { type: String, default: null },
     customImage: { type: String, default: null },
     geminiApiKey: { type: String, default: null },
+    paymentQR: { type: String, default: null },
     createdAt: { type: Date, default: Date.now },
   },
   { timestamps: true },

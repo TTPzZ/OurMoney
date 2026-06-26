@@ -23,6 +23,9 @@ export default function ProfileClient({
   const [name, setName] = useState(user?.name || initialUser.name);
   const [image, setImage] = useState(user?.image || initialUser.image || "");
   const [imageChanged, setImageChanged] = useState(false);
+  const [paymentQR, setPaymentQR] = useState("");
+  const [hasPaymentQR, setHasPaymentQR] = useState(user?.hasPaymentQR || initialUser.hasPaymentQR || false);
+  const [paymentQRChanged, setPaymentQRChanged] = useState(false);
   const [geminiKey, setGeminiKey] = useState("");
   const [hasGeminiKey, setHasGeminiKey] = useState(user?.hasGeminiKey || initialUser.hasGeminiKey || false);
   const [isPending, startTransition] = useTransition();
@@ -31,7 +34,9 @@ export default function ProfileClient({
     setName(nextUser.name);
     setImage(nextUser.image || "");
     setHasGeminiKey(nextUser.hasGeminiKey || false);
+    setHasPaymentQR(nextUser.hasPaymentQR || false);
     setImageChanged(false);
+    setPaymentQRChanged(false);
 
     await update({ name: nextUser.name, image: nextUser.image });
     await mutate("/api/me", { user: nextUser }, { revalidate: false });
@@ -66,7 +71,9 @@ export default function ProfileClient({
     setName(user.name);
     setImage(user.image || "");
     setHasGeminiKey(user.hasGeminiKey || false);
+    setHasPaymentQR(user.hasPaymentQR || false);
     setImageChanged(false);
+    setPaymentQRChanged(false);
   }, [user, isPending]);
 
   const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -86,6 +93,23 @@ export default function ProfileClient({
     reader.readAsDataURL(file);
   };
 
+  const handleQRUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("Kích thước ảnh tối đa là 2MB.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPaymentQR(reader.result as string);
+      setPaymentQRChanged(true);
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleUpdate = () => {
     startTransition(async () => {
       try {
@@ -101,6 +125,9 @@ export default function ProfileClient({
         }
         if (imageChanged) {
           updateBody.image = image;
+        }
+        if (paymentQRChanged) {
+          updateBody.paymentQR = paymentQR;
         }
         if (Object.keys(updateBody).length === 0) {
           alert("Không có thay đổi để lưu.");
@@ -134,6 +161,19 @@ export default function ProfileClient({
       try {
         const nextUser = await patchProfile({ resetImage: true });
         await syncProfileCaches(nextUser);
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : "Đã có lỗi xảy ra";
+        alert(message);
+      }
+    });
+  };
+
+  const handleResetQR = () => {
+    startTransition(async () => {
+      try {
+        const nextUser = await patchProfile({ resetPaymentQR: true });
+        await syncProfileCaches(nextUser);
+        setPaymentQR("");
       } catch (error: unknown) {
         const message = error instanceof Error ? error.message : "Đã có lỗi xảy ra";
         alert(message);
@@ -176,11 +216,55 @@ export default function ProfileClient({
           />
         </Card>
 
-        <div className="space-y-3">
+        {/* QR Code Section */}
+        <div className="pt-4 border-t border-slate-200">
+          <SectionTitle title="Mã QR Thanh Toán" />
+          <Card className="p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-bold text-slate-900">Mã QR Ngân Hàng / Ví</p>
+                <p className="text-[10px] text-slate-400 font-bold mt-1 max-w-[200px]">Dùng để nhận tiền tự động khi tạo hóa đơn hoặc lúc có người trả nợ.</p>
+              </div>
+              <div className="relative">
+                <div className="w-16 h-16 rounded-xl border-2 border-dashed border-slate-200 flex items-center justify-center bg-slate-50 overflow-hidden">
+                  {(paymentQR || hasPaymentQR) ? (
+                    <img src={paymentQR || `/api/user/qr?userId=${user?._id}`} alt="QR" className="w-full h-full object-cover" />
+                  ) : (
+                    <Upload size={20} className="text-slate-300" />
+                  )}
+                </div>
+                <label className="absolute inset-0 cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleQRUpload}
+                    disabled={isPending}
+                  />
+                </label>
+              </div>
+            </div>
+            
+            {hasPaymentQR && !paymentQRChanged && (
+               <Button
+                 variant="outline"
+                 onClick={handleResetQR}
+                 disabled={isPending}
+                 className="w-full text-red-500 border-red-100 bg-red-50"
+                 leftIcon={<RotateCcw size={18} />}
+               >
+                 Xóa mã QR
+               </Button>
+            )}
+          </Card>
+        </div>
+
+        <div className="space-y-3 pt-4 border-t border-slate-200">
+          <SectionTitle title="Hành động" />
           <Button
             onClick={handleUpdate}
             loading={isPending}
-            disabled={!name.trim()}
+            disabled={!name.trim() || (!imageChanged && !paymentQRChanged && name.trim() === (user?.name || initialUser.name))}
             size="xl"
             className="w-full"
             leftIcon={<Save size={24} />}

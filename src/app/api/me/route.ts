@@ -41,6 +41,8 @@ export async function PATCH(request: Request) {
       image?: unknown;
       resetName?: unknown;
       resetImage?: unknown;
+      paymentQR?: unknown;
+      resetPaymentQR?: unknown;
     };
 
     await connectDB();
@@ -57,6 +59,7 @@ export async function PATCH(request: Request) {
       image?: string | null;
       customName?: string | null;
       customImage?: string | null;
+      paymentQR?: string | null;
     } = {};
 
     if (body.resetName === true) {
@@ -82,11 +85,18 @@ export async function PATCH(request: Request) {
       update.image = body.image;
     }
 
+    if (body.resetPaymentQR === true) {
+      update.paymentQR = null;
+    } else if (typeof body.paymentQR === "string") {
+      update.paymentQR = body.paymentQR;
+    }
+
     if (
       update.name === undefined &&
       update.image === undefined &&
       update.customName === undefined &&
-      update.customImage === undefined
+      update.customImage === undefined &&
+      update.paymentQR === undefined
     ) {
       return NextResponse.json({ error: "No profile fields to update" }, { status: 400 });
     }
