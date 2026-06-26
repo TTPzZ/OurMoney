@@ -592,7 +592,7 @@ export default function AddBillForm({
                     <p className="text-xs font-bold text-slate-900">Local OCR</p>
                     <p className="text-[9px] text-slate-400">Nhanh, bảo mật, offline</p>
                   </div>
-                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileChange(e, 'ocr')} />
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'ocr')} />
                 </label>
                 <label className="flex items-center gap-3 px-3 py-3 hover:bg-indigo-50 rounded-xl cursor-pointer transition-colors">
                   <div className="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center text-indigo-600">
@@ -602,7 +602,7 @@ export default function AddBillForm({
                     <p className="text-xs font-bold text-indigo-600">Gemini AI</p>
                     <p className="text-[9px] text-indigo-400">Chính xác nhất, cần mạng</p>
                   </div>
-                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={(e) => handleFileChange(e, 'ai')} />
+                  <input type="file" accept="image/*" className="hidden" onChange={(e) => handleFileChange(e, 'ai')} />
                 </label>
               </div>
             )}
