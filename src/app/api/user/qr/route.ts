@@ -14,7 +14,10 @@ export async function GET(request: NextRequest) {
 
   try {
     await connectDB();
-    const user = await User.findById(userId).select("paymentQR").lean();
+    interface QRUser {
+      paymentQR?: string | null;
+    }
+    const user = await User.findById(userId).select("paymentQR").lean<QRUser>();
 
     if (!user || !user.paymentQR) {
       return new Response("QR Code not found", { status: 404 });
