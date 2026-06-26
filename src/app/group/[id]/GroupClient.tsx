@@ -405,7 +405,7 @@ export default function GroupClient({
       </div>
 
       {/* Fixed Bottom Action */}
-      <div className="fixed bottom-8 w-full max-w-md px-6">
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-40">
         <Button
           size="xl"
           className="w-full shadow-2xl"

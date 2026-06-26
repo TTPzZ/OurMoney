@@ -132,8 +132,8 @@ export default function DashboardClient({
         </Section>
       </div>
 
-      <div className="fixed bottom-8 w-full max-w-md px-6 flex justify-center">
-        <CreateGroupModal onOpenGroup={onOpenGroup} />
+      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 flex justify-center z-40">
+        <CreateGroupModal onOpenGroup={handleOpenGroup} />
       </div>
     </main>
   );
