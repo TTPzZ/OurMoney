@@ -14,16 +14,13 @@ export async function GET(request: NextRequest) {
 
   try {
     await connectDB();
-    interface QRUser {
-      paymentQR?: string | null;
-    }
-    const user = await User.findById(userId).select("paymentQR").lean<QRUser>();
+    const user = await User.findById(userId).select("paymentQR").lean();
 
-    if (!user || !user.paymentQR) {
+    if (!user || !(user as any).paymentQR) {
       return new Response("QR Code not found", { status: 404 });
     }
 
-    const image = user.paymentQR;
+    const image = (user as any).paymentQR as string;
 
     if (image.startsWith("data:image/")) {
       const parts = image.split(";base64,");

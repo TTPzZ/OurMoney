@@ -99,7 +99,7 @@ export default function DebtDetailModal({
       transactions.push({
         id: settlement._id,
         type: 'settlement',
-        date: new Date(settlement.paidAt || settlement.createdAt),
+        date: new Date(settlement.paidAt || settlement.completedAt || Date.now()),
         description: "Thanh toán nợ",
         amount: settlement.amount,
         isUser1OwesUser2: false, // User1 paid User2, reducing User1's debt -> effectively User2 "owes" User1 the refund, or it's a negative debt
@@ -109,7 +109,7 @@ export default function DebtDetailModal({
       transactions.push({
         id: settlement._id,
         type: 'settlement',
-        date: new Date(settlement.paidAt || settlement.createdAt),
+        date: new Date(settlement.paidAt || settlement.completedAt || Date.now()),
         description: "Thanh toán nợ",
         amount: settlement.amount,
         isUser1OwesUser2: true, // User2 paid User1

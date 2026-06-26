@@ -11,7 +11,7 @@ interface BillSplit {
   userId: {
     _id: string;
     name: string;
-    image?: string;
+    image?: string | null;
   };
   amount: number;
 }
@@ -23,7 +23,7 @@ interface Bill {
   paidBy: {
     _id: string;
     name: string;
-    image?: string;
+    image?: string | null;
     hasPaymentQR?: boolean;
   };
   splits: BillSplit[];
