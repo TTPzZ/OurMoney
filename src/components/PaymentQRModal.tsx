@@ -32,7 +32,7 @@ export default function PaymentQRModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 sm:p-6 backdrop-blur-sm"
+      className="fixed inset-0 z-[150] flex items-center justify-center bg-black/60 p-4 sm:p-6 backdrop-blur-sm"
       role="dialog"
       aria-modal="true"
       aria-labelledby="payment-qr-title"

@@ -8,7 +8,7 @@ import { simplifyDebts } from "@/lib/utils/debt";
 import GroupInviteQR from "@/components/GroupInviteQR";
 import GroupMembersDialog from "@/components/GroupMembersDialog";
 import Link from "next/link";
-import { ChevronLeft, Plus, Receipt, Landmark, Trash2, CheckCircle2, Clock, LogOut, QrCode } from "lucide-react";
+import { ChevronLeft, Plus, Receipt, Landmark, Trash2, CheckCircle2, Clock, LogOut, QrCode, ChevronRight } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import Card from "@/components/ui/Card";
 import Button from "@/components/ui/Button";
@@ -17,6 +17,8 @@ import { useRouter } from "next/navigation";
 import ActionButton from "@/components/ActionButton";
 import AddBillModal from "@/components/AddBillModal";
 import PaymentQRModal from "@/components/PaymentQRModal";
+import DebtDetailModal from "@/components/DebtDetailModal";
+import BillDetailModal from "@/components/BillDetailModal";
 import BillList from "@/components/BillList";
 import { deleteGroup, leaveGroup } from "@/lib/actions/group";
 import { markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
@@ -39,6 +41,8 @@ export default function GroupClient({
   const [showMembers, setShowMembers] = useState(false);
   const [showAddBill, setShowAddBill] = useState(false);
   const [qrUser, setQrUser] = useState<{ id: string; name: string; image?: string | null } | null>(null);
+  const [selectedDebtUser, setSelectedDebtUser] = useState<string | null>(null);
+  const [selectedBill, setSelectedBill] = useState<BillWithPayer | null>(null);
   const { mutate: mutateGlobal } = useSWRConfig();
 
   // Task 3: Cache-First strategy for Group Detail
@@ -269,17 +273,24 @@ export default function GroupClient({
                 const isPending = pendingSettlements.some((s: Settlement) => s.from._id === userId && s.to._id === t.to);
                 
                 return (
-                  <Card key={`owe-${idx}`} className="p-4 flex items-center justify-between">
+                  <Card 
+                    key={`owe-${idx}`} 
+                    className="p-4 flex items-center justify-between cursor-pointer hover:border-indigo-200 active:scale-[0.98] transition-all group"
+                    onClick={() => setSelectedDebtUser(t.to)}
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 border border-white shadow-sm">
                         <Avatar src={toMember?.image} name={toMember?.name || "User"} size={40} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-900">Bạn nợ <span className="text-indigo-600">{toMember?.name.split(' ')[0]}</span></p>
+                        <p className="text-sm font-bold text-slate-900 flex items-center gap-1">
+                          Bạn nợ <span className="text-indigo-600">{toMember?.name.split(' ')[0]}</span>
+                          <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                        </p>
                         <p className="text-xs font-bold text-red-500">-₫{t.amount.toLocaleString()}</p>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                       <button
                         type="button"
                         onClick={() => {
@@ -322,17 +333,24 @@ export default function GroupClient({
                 const pending = pendingSettlements.find((s: Settlement) => s.from._id === t.from && s.to._id === userId);
 
                 return (
-                  <Card key={`receive-${idx}`} className="p-4 flex items-center justify-between">
+                  <Card 
+                    key={`receive-${idx}`} 
+                    className="p-4 flex items-center justify-between cursor-pointer hover:border-indigo-200 active:scale-[0.98] transition-all group"
+                    onClick={() => setSelectedDebtUser(t.from)}
+                  >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full overflow-hidden bg-slate-100 border border-white shadow-sm">
                         <Avatar src={fromMember?.image} name={fromMember?.name || "User"} size={40} />
                       </div>
                       <div>
-                        <p className="text-sm font-bold text-slate-900"><span className="text-indigo-600">{fromMember?.name.split(' ')[0]}</span> nợ bạn</p>
+                        <p className="text-sm font-bold text-slate-900 flex items-center gap-1">
+                          <span className="text-indigo-600">{fromMember?.name.split(' ')[0]}</span> nợ bạn
+                          <ChevronRight size={14} className="text-slate-300 group-hover:text-indigo-500 transition-colors" />
+                        </p>
                         <p className="text-xs font-bold text-emerald-500">+₫{t.amount.toLocaleString()}</p>
                       </div>
                     </div>
-                    <div className="flex flex-col items-end gap-1">
+                    <div className="flex flex-col items-end gap-1" onClick={(e) => e.stopPropagation()}>
                       {pending ? (
                         <>
                           <ActionButton 
@@ -419,6 +437,22 @@ export default function GroupClient({
         userId={qrUser?.id || ""}
         userName={qrUser?.name || ""}
         userImage={qrUser?.image}
+      />
+
+      <DebtDetailModal
+        open={!!selectedDebtUser}
+        onClose={() => setSelectedDebtUser(null)}
+        user1Id={userId}
+        user2Id={selectedDebtUser || ""}
+        groupMembers={group.members}
+        bills={bills}
+        settlements={settlements}
+        onSelectBill={(bill) => setSelectedBill(bill)}
+      />
+
+      <BillDetailModal
+        bill={selectedBill}
+        onClose={() => setSelectedBill(null)}
       />
     </main>
   );
