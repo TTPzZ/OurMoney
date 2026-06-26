@@ -130,7 +130,11 @@ export default function GroupClient({
   const transactions = simplifyDebts(
     bills.map((b: BillWithPayer) => ({
       ...b,
-      paidBy: b.paidBy._id
+      paidBy: b.paidBy._id,
+      splits: b.splits.map(s => ({
+        ...s,
+        userId: s.userId._id
+      }))
     })), 
     memberIds,
     completedSettlements
