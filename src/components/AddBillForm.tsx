@@ -172,6 +172,40 @@ const OCR_FAILURE_MESSAGES: Record<OCRFailureReason, string> = {
   [OCRFailureReason.OCR_ERROR]: "OCR gặp lỗi trong quá trình xử lý ảnh."
 };
 
+export const compressImageForUpload = (file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("Không thể khởi tạo canvas context"));
+
+        const MAX_DIM = 1200;
+        let width = img.width;
+        let height = img.height;
+        if (width > MAX_DIM || height > MAX_DIM) {
+          const ratio = Math.min(MAX_DIM / width, MAX_DIM / height);
+          width *= ratio;
+          height *= ratio;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Quality 0.6 is good enough for receipts and reduces size drastically (usually < 200KB)
+        resolve(canvas.toDataURL("image/jpeg", 0.6));
+      };
+      img.onerror = () => reject(new Error("Lỗi khi tải ảnh"));
+      img.src = e.target?.result as string;
+    };
+    reader.onerror = () => reject(new Error("Lỗi khi đọc file"));
+    reader.readAsDataURL(file);
+  });
+};
+
 /**
  * Tiền xử lý ảnh nâng cao cho Tesseract OCR
  * Sử dụng Adaptive Thresholding (Ngưỡng thích nghi) để tự động xử lý đổ bóng và ánh sáng không đều
@@ -377,8 +411,8 @@ export default function AddBillForm({
     setError("");
 
     try {
-      // 1. Tiền xử lý và nén ảnh để lưu trữ (Sử dụng mức nén 0.7 để cân bằng chất lượng/dung lượng)
-      const compressedImg = await preprocessImage(file, 0); 
+      // 1. Nén ảnh giữ nguyên màu để lưu trữ, dung lượng cực nhẹ
+      const compressedImg = await compressImageForUpload(file); 
       setBillImage(compressedImg);
 
       let finalData = null;

@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any, @typescript-eslint/no-unused-vars */
 import connectDB from "@/lib/db";
 import User from "@/models/User";
 import { NextRequest } from "next/server";

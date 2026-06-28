@@ -69,10 +69,23 @@ export default function GroupClient({
       dedupingInterval: 5000,
       onSuccess: (newData) => {
         if (typeof window !== "undefined") {
-          localStorage.setItem(getGroupCacheKey(groupId), JSON.stringify({
-            data: newData,
-            cachedAt: Date.now()
-          }));
+          // Lọc bỏ imageUrl để tiết kiệm bộ nhớ LocalStorage (tránh QuotaExceededError)
+          const dataToCache = {
+            ...newData,
+            bills: newData.bills ? newData.bills.map(bill => ({
+              ...bill,
+              imageUrl: undefined
+            })) : []
+          };
+          
+          try {
+            localStorage.setItem(getGroupCacheKey(groupId), JSON.stringify({
+              data: dataToCache,
+              cachedAt: Date.now()
+            }));
+          } catch (err) {
+            console.error("Lỗi khi lưu cache nhóm (có thể do quá quota):", err);
+          }
         }
       }
     }
