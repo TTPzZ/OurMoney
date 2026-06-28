@@ -134,9 +134,11 @@ export default function DashboardClient({
       </div>
     </main>
 
-    {/* Fixed Bottom Action - nằm ngoài <main> để tránh transform containment */}
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 flex justify-center z-40">
-      <CreateGroupModal onOpenGroup={handleOpenGroup} />
+    {/* Fixed Bottom Action - nằm ngoài <main> và không dùng transform để tránh CSS containment */}
+    <div className="fixed bottom-8 left-0 right-0 w-full flex justify-center z-40 pointer-events-none">
+      <div className="w-full max-w-md px-6 pointer-events-auto">
+        <CreateGroupModal onOpenGroup={handleOpenGroup} />
+      </div>
     </div>
     </>
   );

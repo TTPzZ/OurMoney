@@ -412,7 +412,12 @@ export default function GroupClient({
 
         {/* Recent Bills */}
         <Section title="Hóa đơn gần đây" icon={<Receipt size={16} />}>
-          <BillList bills={bills} />
+          <BillList 
+            bills={bills} 
+            currentUserId={userId}
+            isGroupCreator={isCreator}
+            onDeleteBill={handleBillDeleted}
+          />
           {bills.length === 0 && (
             <div className="bg-white p-8 rounded-3xl text-center border-2 border-dashed border-slate-100">
               <p className="text-slate-400 font-medium text-sm">Chưa có hóa đơn nào được tạo.</p>
@@ -425,16 +430,18 @@ export default function GroupClient({
       </div>
     </main>
 
-    {/* Fixed Bottom Action - nằm ngoài <main> để tránh transform containment */}
-    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-40">
-      <Button
-        size="xl"
-        className="w-full shadow-2xl"
-        leftIcon={<Plus size={24} />}
-        onClick={() => setShowAddBill(true)}
-      >
-        Thêm hóa đơn mới
-      </Button>
+    {/* Fixed Bottom Action - nằm ngoài <main> và không dùng transform để tránh CSS containment */}
+    <div className="fixed bottom-8 left-0 right-0 w-full flex justify-center z-40 pointer-events-none">
+      <div className="w-full max-w-md px-6 pointer-events-auto">
+        <Button
+          size="xl"
+          className="w-full shadow-2xl"
+          leftIcon={<Plus size={24} />}
+          onClick={() => setShowAddBill(true)}
+        >
+          Thêm hóa đơn mới
+        </Button>
+      </div>
     </div>
 
     <AddBillModal

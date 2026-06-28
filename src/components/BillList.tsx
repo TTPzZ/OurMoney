@@ -30,7 +30,17 @@ interface Bill {
   createdAt: string;
 }
 
-export default function BillList({ bills }: { bills: Bill[] }) {
+export default function BillList({ 
+  bills,
+  currentUserId,
+  isGroupCreator,
+  onDeleteBill,
+}: { 
+  bills: Bill[];
+  currentUserId?: string;
+  isGroupCreator?: boolean;
+  onDeleteBill?: (billId: string) => void;
+}) {
   const [selectedBill, setSelectedBill] = useState<Bill | null>(null);
   const [showFullImage, setShowFullImage] = useState(false);
   const [showQR, setShowQR] = useState(false);
@@ -92,6 +102,12 @@ export default function BillList({ bills }: { bills: Bill[] }) {
       <BillDetailModal
         bill={selectedBill}
         onClose={() => setSelectedBill(null)}
+        currentUserId={currentUserId}
+        isGroupCreator={isGroupCreator}
+        onDelete={(billId) => {
+          setSelectedBill(null);
+          if (onDeleteBill) onDeleteBill(billId);
+        }}
       />
     </div>
   );
