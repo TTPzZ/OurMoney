@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Avatar from "@/components/Avatar";
-import { X, Receipt, Users, CreditCard, ExternalLink, Maximize2, QrCode } from "lucide-react";
+import { X, Receipt, Users, CreditCard, ExternalLink, Maximize2, QrCode, Trash2 } from "lucide-react";
 import Card from "@/components/ui/Card";
 import PaymentQRModal from "@/components/PaymentQRModal";
 
@@ -35,14 +35,35 @@ interface Bill {
 export default function BillDetailModal({
   bill,
   onClose,
+  currentUserId,
+  isGroupCreator,
+  onDelete,
 }: {
   bill: Bill | null;
   onClose: () => void;
+  currentUserId?: string;
+  isGroupCreator?: boolean;
+  onDelete?: (billId: string) => void;
 }) {
   const [showFullImage, setShowFullImage] = useState(false);
   const [showQR, setShowQR] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   if (!bill) return null;
+
+  const canDelete = currentUserId === bill.paidBy._id || isGroupCreator;
+
+  const handleDelete = async () => {
+    if (!onDelete || !canDelete) return;
+    if (confirm("Bạn có chắc chắn muốn xóa hóa đơn này? Mọi khoản nợ liên quan sẽ được tính toán lại.")) {
+      setIsDeleting(true);
+      try {
+        await onDelete(bill._id);
+      } finally {
+        setIsDeleting(false);
+      }
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -57,15 +78,27 @@ export default function BillDetailModal({
               {formatDistanceToNow(new Date(bill.createdAt))} ago
             </p>
           </div>
-          <button 
-            onClick={() => {
-              onClose();
-              setShowFullImage(false);
-            }}
-            className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 active:scale-90 transition-transform"
-          >
-            <X size={20} />
-          </button>
+          <div className="flex items-center gap-2">
+            {canDelete && onDelete && (
+              <button 
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="w-10 h-10 bg-red-50 rounded-full flex items-center justify-center text-red-500 hover:bg-red-100 active:scale-90 transition-all disabled:opacity-50"
+                title="Xóa hóa đơn"
+              >
+                <Trash2 size={18} />
+              </button>
+            )}
+            <button 
+              onClick={() => {
+                onClose();
+                setShowFullImage(false);
+              }}
+              className="w-10 h-10 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 active:scale-90 transition-transform"
+            >
+              <X size={20} />
+            </button>
+          </div>
         </div>
 
         <div className="overflow-y-auto p-6 space-y-6" style={{ maxHeight: 'calc(90vh - 100px)' }}>

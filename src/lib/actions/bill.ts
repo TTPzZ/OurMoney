@@ -69,3 +69,30 @@ export async function getBillsByGroupId(groupId: string) {
     })),
   ));
 }
+export async function deleteBill(billId: string, groupId: string) {
+  const session = await auth();
+  if (!session?.user?.id) throw new Error("Unauthorized");
+
+  await connectDB();
+
+  // Verify membership and fetch group to check creator
+  const Group = (await import("@/models/Group")).default;
+  const group = await Group.findById(groupId);
+  if (!group || !group.members.includes(session.user.id)) {
+    throw new Error("Forbidden");
+  }
+
+  const bill = await Bill.findById(billId);
+  if (!bill) throw new Error("Bill not found");
+
+  // Only allow bill creator (paidBy) or group creator to delete
+  const isPaidBy = bill.paidBy.toString() === session.user.id;
+  const isGroupCreator = group.createdBy.toString() === session.user.id;
+
+  if (!isPaidBy && !isGroupCreator) {
+    throw new Error("Không có quyền xóa hóa đơn này");
+  }
+
+  await Bill.findByIdAndDelete(billId);
+  return { success: true };
+}

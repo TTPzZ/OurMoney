@@ -22,6 +22,7 @@ import BillDetailModal from "@/components/BillDetailModal";
 import BillList from "@/components/BillList";
 import { deleteGroup, leaveGroup } from "@/lib/actions/group";
 import { markAsPaid, confirmReceived, directConfirm } from "@/lib/actions/settlement";
+import { deleteBill } from "@/lib/actions/bill";
 import type { BillWithPayer, GroupDetailData, GroupMember, Settlement } from "@/lib/money-types";
 
 const getGroupCacheKey = (id: string) => `ourmoney_group_${id}`;
@@ -167,6 +168,24 @@ export default function GroupClient({
     mutateGlobal("/api/groups");
     
     setShowAddBill(false);
+  };
+
+  const handleBillDeleted = async (billId: string) => {
+    try {
+      await deleteBill(billId, groupId);
+      const newData = await mutate();
+      if (newData && typeof window !== "undefined") {
+        localStorage.setItem(getGroupCacheKey(groupId), JSON.stringify({
+          data: newData,
+          cachedAt: Date.now()
+        }));
+      }
+      mutateGlobal("/api/groups");
+      setSelectedBill(null);
+    } catch (error) {
+      console.error("Failed to delete bill", error);
+      alert("Xóa hóa đơn thất bại. Vui lòng thử lại.");
+    }
   };
 
   return (
@@ -455,6 +474,9 @@ export default function GroupClient({
     <BillDetailModal
       bill={selectedBill}
       onClose={() => setSelectedBill(null)}
+      currentUserId={userId}
+      isGroupCreator={isCreator}
+      onDelete={handleBillDeleted}
     />
     </>
   );
