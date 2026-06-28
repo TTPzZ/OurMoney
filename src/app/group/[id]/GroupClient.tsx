@@ -170,6 +170,7 @@ export default function GroupClient({
   };
 
   return (
+    <>
     <main className="min-h-screen bg-slate-50 flex flex-col items-center p-4 pb-32 w-full">
       {/* Header */}
       <div className="w-full max-w-md flex justify-between items-center mb-6 pt-4">
@@ -403,58 +404,59 @@ export default function GroupClient({
         {/* Invite Section */}
         <GroupInviteQR inviteCode={group.inviteCode} groupName={group.name} />
       </div>
-
-      {/* Fixed Bottom Action */}
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-40">
-        <Button
-          size="xl"
-          className="w-full shadow-2xl"
-          leftIcon={<Plus size={24} />}
-          onClick={() => setShowAddBill(true)}
-        >
-          Thêm hóa đơn mới
-        </Button>
-      </div>
-
-      <AddBillModal
-        open={showAddBill}
-        onClose={() => setShowAddBill(false)}
-        groupId={groupId}
-        members={group.members}
-        currentUserId={userId}
-        onSuccess={handleBillCreated}
-      />
-
-      <GroupMembersDialog
-        open={showMembers}
-        onClose={() => setShowMembers(false)}
-        members={group.members}
-      />
-
-      <PaymentQRModal
-        open={!!qrUser}
-        onClose={() => setQrUser(null)}
-        userId={qrUser?.id || ""}
-        userName={qrUser?.name || ""}
-        userImage={qrUser?.image}
-      />
-
-      <DebtDetailModal
-        open={!!selectedDebtUser}
-        onClose={() => setSelectedDebtUser(null)}
-        user1Id={userId}
-        user2Id={selectedDebtUser || ""}
-        groupMembers={group.members}
-        bills={bills}
-        settlements={settlements}
-        onSelectBill={(bill) => setSelectedBill(bill)}
-      />
-
-      <BillDetailModal
-        bill={selectedBill}
-        onClose={() => setSelectedBill(null)}
-      />
     </main>
+
+    {/* Fixed Bottom Action - nằm ngoài <main> để tránh transform containment */}
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 z-40">
+      <Button
+        size="xl"
+        className="w-full shadow-2xl"
+        leftIcon={<Plus size={24} />}
+        onClick={() => setShowAddBill(true)}
+      >
+        Thêm hóa đơn mới
+      </Button>
+    </div>
+
+    <AddBillModal
+      open={showAddBill}
+      onClose={() => setShowAddBill(false)}
+      groupId={groupId}
+      members={group.members}
+      currentUserId={userId}
+      onSuccess={handleBillCreated}
+    />
+
+    <GroupMembersDialog
+      open={showMembers}
+      onClose={() => setShowMembers(false)}
+      members={group.members}
+    />
+
+    <PaymentQRModal
+      open={!!qrUser}
+      onClose={() => setQrUser(null)}
+      userId={qrUser?.id || ""}
+      userName={qrUser?.name || ""}
+      userImage={qrUser?.image}
+    />
+
+    <DebtDetailModal
+      open={!!selectedDebtUser}
+      onClose={() => setSelectedDebtUser(null)}
+      user1Id={userId}
+      user2Id={selectedDebtUser || ""}
+      groupMembers={group.members}
+      bills={bills}
+      settlements={settlements}
+      onSelectBill={(bill) => setSelectedBill(bill)}
+    />
+
+    <BillDetailModal
+      bill={selectedBill}
+      onClose={() => setSelectedBill(null)}
+    />
+    </>
   );
 }
 

@@ -57,8 +57,8 @@ export default function CreateGroupModal({
       </Button>
 
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
-          <Card className="w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in duration-200 relative">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <Card className="w-full max-w-sm p-6 shadow-2xl animate-in fade-in slide-in-from-bottom-4 sm:zoom-in duration-200 relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsOpen(false)}
               className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 transition-colors"

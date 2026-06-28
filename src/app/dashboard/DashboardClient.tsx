@@ -74,6 +74,7 @@ export default function DashboardClient({
   };
 
   return (
+    <>
     <main className="min-h-screen bg-slate-50 flex flex-col items-center p-6 pb-24 w-full">
       <div className="w-full max-w-md flex justify-between items-center mb-8 pt-4">
         <div>
@@ -131,10 +132,12 @@ export default function DashboardClient({
           )}
         </Section>
       </div>
-
-      <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 flex justify-center z-40">
-        <CreateGroupModal onOpenGroup={handleOpenGroup} />
-      </div>
     </main>
+
+    {/* Fixed Bottom Action - nằm ngoài <main> để tránh transform containment */}
+    <div className="fixed bottom-8 left-1/2 -translate-x-1/2 w-full max-w-md px-6 flex justify-center z-40">
+      <CreateGroupModal onOpenGroup={handleOpenGroup} />
+    </div>
+    </>
   );
 }
