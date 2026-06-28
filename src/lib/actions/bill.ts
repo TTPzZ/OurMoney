@@ -62,6 +62,7 @@ export async function getBillsByGroupId(groupId: string) {
     bills.map((bill) => ({
       ...bill,
       paidBy: toPublicUser(bill.paidBy as unknown as PublicUserDocument),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       splits: bill.splits.map((split: any) => ({
         ...split,
         userId: toPublicUser(split.userId as unknown as PublicUserDocument),

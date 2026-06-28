@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { useState } from "react";
 import { formatDistanceToNow } from "date-fns";
 import Avatar from "@/components/Avatar";

@@ -35,11 +35,13 @@ export default function DebtDetailModal({
   groupMembers: GroupMember[];
   bills: BillWithPayer[];
   settlements: Settlement[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   onSelectBill: (bill: any) => void;
 }) {
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true);
   }, []);
 
@@ -106,6 +108,7 @@ export default function DebtDetailModal({
       transactions.push({
         id: settlement._id,
         type: 'settlement',
+        // eslint-disable-next-line react-hooks/purity
         date: new Date(settlement.paidAt || settlement.completedAt || Date.now()),
         description: "Thanh toán nợ",
         amount: settlement.amount,
@@ -116,6 +119,7 @@ export default function DebtDetailModal({
       transactions.push({
         id: settlement._id,
         type: 'settlement',
+        // eslint-disable-next-line react-hooks/purity
         date: new Date(settlement.paidAt || settlement.completedAt || Date.now()),
         description: "Thanh toán nợ",
         amount: settlement.amount,

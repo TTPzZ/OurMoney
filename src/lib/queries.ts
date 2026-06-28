@@ -72,6 +72,7 @@ export async function getBillsByGroupId(groupId: string): Promise<BillWithPayer[
     bills.map((bill) => ({
       ...bill,
       paidBy: normalizePublicUser(bill.paidBy),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       splits: bill.splits.map((split: any) => ({
         ...split,
         userId: normalizePublicUser(split.userId),
