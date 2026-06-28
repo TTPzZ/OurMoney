@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { formatDistanceToNow } from "date-fns";
 import Avatar from "@/components/Avatar";
 import { X, Receipt, Users, CreditCard, ExternalLink, Maximize2, QrCode, Trash2 } from "lucide-react";
@@ -48,8 +49,13 @@ export default function BillDetailModal({
   const [showFullImage, setShowFullImage] = useState(false);
   const [showQR, setShowQR] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [mounted, setMounted] = useState(false);
 
-  if (!bill) return null;
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!bill || !mounted) return null;
 
   const canDelete = currentUserId === bill.paidBy._id || isGroupCreator;
 
@@ -65,7 +71,7 @@ export default function BillDetailModal({
     }
   };
 
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
         className="w-full max-w-md bg-slate-50 rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-in slide-in-from-bottom-10 duration-300 relative"
@@ -230,6 +236,7 @@ export default function BillDetailModal({
         userName={bill.paidBy.name}
         userImage={bill.paidBy.image}
       />
-    </div>
+    </div>,
+    document.body
   );
 }

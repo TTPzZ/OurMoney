@@ -1,5 +1,7 @@
 "use client";
 
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import AddBillForm from "./AddBillForm";
 
@@ -26,10 +28,16 @@ export default function AddBillModal({
   currentUserId,
   onSuccess,
 }: AddBillModalProps) {
-  if (!open) return null;
+  const [mounted, setMounted] = useState(false);
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 backdrop-blur-sm p-4 sm:items-center transition-all animate-in fade-in duration-200">
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!open || !mounted) return null;
+
+  return createPortal(
+    <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/40 backdrop-blur-sm p-4 sm:items-center transition-all animate-in fade-in duration-200">
       <div 
         className="relative max-h-[90vh] w-full max-w-xl overflow-hidden rounded-3xl bg-slate-50 shadow-2xl flex flex-col animate-in slide-in-from-bottom-4 duration-300"
         onClick={(e) => e.stopPropagation()}
@@ -63,6 +71,7 @@ export default function AddBillModal({
         className="absolute inset-0 -z-10" 
         onClick={onClose}
       />
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Plus, X } from "lucide-react";
 import { createGroup } from "@/lib/actions/group";
 import { useRouter } from "next/navigation";
@@ -17,8 +18,13 @@ export default function CreateGroupModal({
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState("");
   const [isPending, setIsPending] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const router = useRouter();
   const { mutate } = useSWRConfig();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,8 +62,8 @@ export default function CreateGroupModal({
         Tạo nhóm mới
       </Button>
 
-      {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+      {isOpen && mounted && createPortal(
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
           <Card className="w-full max-w-sm p-6 shadow-2xl animate-in fade-in zoom-in duration-200 relative max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsOpen(false)}
@@ -94,7 +100,8 @@ export default function CreateGroupModal({
               </form>
             </div>
           </Card>
-        </div>
+        </div>,
+        document.body
       )}
     </>
   );

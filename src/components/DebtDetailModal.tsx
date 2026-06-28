@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
 import { X, ArrowRightLeft, Receipt, ExternalLink } from "lucide-react";
 import Avatar from "@/components/Avatar";
 import { formatDistanceToNow } from "date-fns";
@@ -36,6 +37,12 @@ export default function DebtDetailModal({
   settlements: Settlement[];
   onSelectBill: (bill: any) => void;
 }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
   useEffect(() => {
     if (!open) return;
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -45,7 +52,7 @@ export default function DebtDetailModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [open, onClose]);
 
-  if (!open) return null;
+  if (!open || !mounted) return null;
 
   const user2 = groupMembers.find(m => m._id === user2Id);
   if (!user2) return null;
@@ -121,9 +128,9 @@ export default function DebtDetailModal({
   // Sort chronological
   transactions.sort((a, b) => a.date.getTime() - b.date.getTime());
 
-  return (
+  return createPortal(
     <div
-      className="fixed inset-0 z-[90] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
       role="dialog"
       aria-modal="true"
       onMouseDown={onClose}
@@ -214,6 +221,7 @@ export default function DebtDetailModal({
           </div>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
