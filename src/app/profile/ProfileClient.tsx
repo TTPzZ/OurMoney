@@ -2,8 +2,8 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { useSession } from "next-auth/react";
-import { RotateCcw, Save, Upload } from "lucide-react";
+import { useSession, signOut } from "next-auth/react";
+import { RotateCcw, Save, Upload, LogOut } from "lucide-react";
 import { useSWRConfig } from "swr";
 import Avatar from "@/components/Avatar";
 import Button from "@/components/ui/Button";
@@ -339,6 +339,19 @@ export default function ProfileClient({
               Lưu Key
             </Button>
           </Card>
+        </div>
+        {/* Logout Section */}
+        <div className="pt-4 border-t border-slate-200">
+          <SectionTitle title="Tài khoản" />
+          <Button
+            variant="outline"
+            onClick={() => signOut({ callbackUrl: "/" })}
+            disabled={isPending}
+            className="w-full text-red-600 border-red-200 hover:bg-red-50 active:bg-red-100"
+            leftIcon={<LogOut size={18} />}
+          >
+            Đăng xuất
+          </Button>
         </div>
       </div>
     </div>
